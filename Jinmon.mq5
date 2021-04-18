@@ -46,8 +46,8 @@ ulong PlaceOrder(int cmd, double volume, double price, int slippage, double stop
 
 //--- input parameters
 input double   lots=0.1;
-input double   tp=15;
-input double   sl=15;
+input double   tp=21;
+input double   sl=14;
 input bool   UsePattern1bullish=true;
 input bool   UsePattern2bullish=true;
 input bool   UsePattern3bullish=true;
@@ -58,7 +58,7 @@ bool   UsePattern3bearish=false;
 //---
 int refIndex = -1;
 int refhit=0;
-double Refs[20];
+double Refs[100];
 double ref;
 //--- Price Action Recognition.
 bool orderopen = false;
@@ -152,10 +152,10 @@ void PriceAction()
 //| Support and Resistance                                           |
 //+------------------------------------------------------------------+
 //---
-input int MaxLimit = 240;
-input int MaxCrossesLevel = 10;
+input int MaxLimit = 55;
+input int MaxCrossesLevel = 9;
 double MaxR = 0.1;
-input ENUM_TIMEFRAMES TimeFrame = PERIOD_M1;
+input ENUM_TIMEFRAMES TimeFrame = PERIOD_M30;
 //---
 int CrossBarsNum[];
 bool CrossBarsMin[];
