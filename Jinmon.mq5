@@ -7,6 +7,9 @@
 #property link      ""
 #property version   "1.00"
 
+#include <Trade\PositionInfo.mqh>
+#include <Trade\Trade.mqh>
+
 input long order_magic = 55555;
 
 const int SELL_ORDER = -1;
@@ -15,7 +18,12 @@ const int BUY_ORDER = 1;
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+CPositionInfo position;
+CTrade trade;
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 ulong PlaceOrder(int cmd, double volume, double price, int slippage, double stoploss, double takeprofit)
   {
 //--- MQL4
@@ -32,15 +40,31 @@ ulong PlaceOrder(int cmd, double volume, double price, int slippage, double stop
    request.volume = volume;
    request.deviation = slippage;
    request.sl = stoploss;
-   request.tp = takeprofit;
+//   request.tp = takeprofit;
    request.price = price;
 
    MqlTradeResult result = {0};
-   if(OrderSend(request, result))
+   if(trade.OrderSend(request, result))
      {
       Print(__FUNCTION__,":",result.comment);
       return true;
      }
+   return false;
+  }
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+bool CloseOrder(double volume)
+  {
+   if(PositionsTotal() == 0)
+      return true;
+
+   if(position.SelectByIndex(0))
+      if(position.Symbol() == _Symbol)
+         if(trade.PositionClose(position.Ticket()))
+            return true;
+
    return false;
   }
 
@@ -57,9 +81,10 @@ bool   UsePattern3bearish=false;
 
 //---
 int refIndex = -1;
-int refhit=0;
+bool refHit = false;
 double Refs[100];
-double ref;
+double targetRef;
+
 //--- Price Action Recognition.
 bool orderopen = false;
 bool orderplaced = false;
@@ -90,7 +115,7 @@ void PriceAction()
    double C3=NormalizeDouble(iClose(Symbol(),PERIOD_M1,0),dig);
 
 //---- Check to see if Reference Price (ref) is reached
-   if(refhit==0)
+   if(!refHit)
      {
       double ref;
       for(int i = 0; i <= refIndex; i ++)
@@ -98,10 +123,11 @@ void PriceAction()
          ref = Refs[i];
          if((H3==ref) || (L3==ref) || ((H3>ref) && (L3<ref)) || ((L2<ref) && (H3>=ref)) || ((H2>ref) && (L3<=ref)))
            {
-            refhit=1;
+            refHit = true;
+            targetRef = ref;
            }
         }
-        return ;
+      return ;
      }
 //---- Check for patterns if no position has been opened
    double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
@@ -111,42 +137,78 @@ void PriceAction()
    if(orderopen == false)
      {
       //--- Pattern 1 - bullish
-      if(UsePattern1bullish && refhit==1 && C1>=O1 && L1<O1 && ((O1-L1)>(C1-O1)) && C2>=O2 && C2>H1 && L2>L1 && C2>ref)
+      if(UsePattern1bullish && refHit && C1>=O1 && L1<O1 && ((O1-L1)>(C1-O1)) && C2>=O2 && C2>H1 && L2>L1 && C2>targetRef)
         {
          orderopen=PlaceOrder(BUY_ORDER,lots,Ask,5,Bid-(sl*10*Point),Bid+(tp*10*Point));
          return ;
         }
       //--- Pattern 2 - bullish
-      if(UsePattern2bullish && refhit==1 && C1<O1 && C2>O2 && ((O1-C1)>(H1-O1)) && ((O1-C1)>(C1-L1)) && ((C2-O2)>(H2-C2)) && ((C2-O2)>(O2-L2)) && O2<=C1 && O2>=L1 && C2>=O1 && C2<=H1 && C2>ref)
+      if(UsePattern2bullish && refHit && C1<O1 && C2>O2 && ((O1-C1)>(H1-O1)) && ((O1-C1)>(C1-L1)) && ((C2-O2)>(H2-C2)) && ((C2-O2)>(O2-L2)) && O2<=C1 && O2>=L1 && C2>=O1 && C2<=H1 && C2>targetRef)
         {
          orderopen=PlaceOrder(BUY_ORDER,lots,Ask,5,Bid-(sl*10*Point),Bid+(tp*10*Point));
          return ;
         }
       //--- Pattern 3 - bullish
-      if(UsePattern3bullish && refhit==1 && C1>O1 && ((C2-O2)>=(H2-C2)) && C2>O2 && C2>C1 && C1>ref && C2>ref)
+      if(UsePattern3bullish && refHit && C1>O1 && ((C2-O2)>=(H2-C2)) && C2>O2 && C2>C1 && C1>targetRef && C2>targetRef)
         {
          orderopen=PlaceOrder(BUY_ORDER,lots,Ask,5,Bid-(sl*10*Point),Bid+(tp*10*Point));
          return ;
         }
       //---- Pattern 1 - bearish
-      if(UsePattern1bearish && refhit==1 && C1<=O1 && H1>O1 && ((H1-O1)>(O1-C1)) && C2<=O2 && C2<L1 && H2<H1 && C2<ref)
+      if(UsePattern1bearish && refHit && C1<=O1 && H1>O1 && ((H1-O1)>(O1-C1)) && C2<=O2 && C2<L1 && H2<H1 && C2<targetRef)
         {
          orderopen=PlaceOrder(SELL_ORDER,lots,Bid,5,Ask+(sl*10*Point),Ask-(tp*10*Point));
          return ;
         }
       //---- Pattern 2 - bearish
-      if(UsePattern2bearish && refhit==1 && C1>O1 && C2<O2 && ((C1-O1)>(H1-C1)) && ((C1-O1)>(O1-L1)) && ((O2-C2)>(H2-O2)) && ((O2-C2)>(C2-L2)) && O2>=C1 && O2<=H1 && C2<=O1 && C2>=L1 && C2<ref)
+      if(UsePattern2bearish && refHit && C1>O1 && C2<O2 && ((C1-O1)>(H1-C1)) && ((C1-O1)>(O1-L1)) && ((O2-C2)>(H2-O2)) && ((O2-C2)>(C2-L2)) && O2>=C1 && O2<=H1 && C2<=O1 && C2>=L1 && C2<targetRef)
         {
          orderopen=PlaceOrder(SELL_ORDER,lots,Bid,5,Ask+(sl*10*Point),Ask-(tp*10*Point));
          return ;
         }
       //---- Pattern 3 - bearish
-      if(UsePattern3bearish && refhit==1 && C1<O1 && ((O2-C2)>=(C2-L2)) && C2<O2 && C2<C1 && C1<ref && C2<ref)
+      if(UsePattern3bearish && refHit && C1<O1 && ((O2-C2)>=(C2-L2)) && C2<O2 && C2<C1 && C1<targetRef && C2<targetRef)
         {
          orderopen=PlaceOrder(SELL_ORDER,lots,Bid,5,Ask+(sl*10*Point),Ask-(tp*10*Point));
          return ;
         }
      }
+   else
+      if(orderplaced)
+        {
+         bool closeOrder = false;
+         //---- Pattern 1 - bearish
+         if(C1<=O1 && H1>O1 && ((H1-O1)>(O1-C1)) && C2<=O2 && C2<L1 && H2<H1)
+           {
+            closeOrder = true;
+           }
+         //---- Pattern 2 - bearish
+         else
+            if(C1>O1 && C2<O2 && ((C1-O1)>(H1-C1)) && ((C1-O1)>(O1-L1)) && ((O2-C2)>(H2-O2)) && ((O2-C2)>(C2-L2)) && O2>=C1 && O2<=H1 && C2<=O1 && C2>=L1)
+              {
+               closeOrder = true;
+              }
+            //---- Pattern 3 - bearish
+            else
+               if(C1<O1 && ((O2-C2)>=(C2-L2)) && C2<O2 && C2<C1)
+                 {
+                  closeOrder = true;
+                 }
+         //--- Close position while bearish.
+         if(closeOrder)
+           {
+            if(CloseOrder(lots))
+            {
+               Print("Close Position to protect profits!");
+               orderopen = false;
+               orderplaced = false;
+               refHit = false;
+            }
+            else
+               Print("Failed to close position!!!");
+           }
+        }
+
   }
 //+------------------------------------------------------------------+
 //| Support and Resistance                                           |
@@ -204,7 +266,7 @@ void FindLevel()
       d2Num=d2;
      }
 
-   CopyTime(_Symbol, PERIOD_M1, 0, limit, Time);
+   CopyTime(_Symbol, TimeFrame, 0, limit, Time);
 
    for(double d=d1; d<=d2; d+=0.01)
      {
@@ -212,9 +274,13 @@ void FindLevel()
       for(int i=1; i<limit; i++)
          if(d>prLow(i)&&d<prHigh(i))
             CrossBarsNum[di]++;
+      //if(TMaxI != 0 && Time[limit - 1] != TMaxI)
+      //if(d > prLow(limit + 1) && d < prHigh(limit + 1))
+      //   CrossBarsNum[di]--;
       if(TMaxI != 0 && Time[limit - 1] != TMaxI)
          if(d > prLow(iBarShift(NULL,0,TMaxI)) && d < prHigh(iBarShift(NULL,0,TMaxI)))
             CrossBarsNum[di]--;
+
      }
    TMaxI = Time[limit - 1] - 1;
 
@@ -291,6 +357,7 @@ void OnTimer()
   {
 //---
    FindLevel();
+
    if(orderplaced == true)
      {
       if(PositionsTotal() == 0)
@@ -298,19 +365,22 @@ void OnTimer()
          Print("Order Closed");
          orderopen = false;
          orderplaced = false;
-         refhit = 0;
+         refHit = false;
         }
      }
    else
       if(orderopen == true)
         {
-         if(PositionsTotal() > 0)
+         if(PositionsTotal() > 0) {
             orderplaced = true;
-         else {
+            //refHit = false;
+         }
+         else
+           {
             orderopen = false;
             orderplaced = false;
-            refhit = 0;
-         }
+            refHit = false;
+           }
         }
   }
 //+------------------------------------------------------------------+
