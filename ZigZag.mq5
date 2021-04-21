@@ -82,8 +82,8 @@ input double   tp=21;
 input double   sl=14;
 
 //--- Price Action Recognition.
-bool orderopen = false;
-bool orderplaced = false;
+bool IsOrderOpen = false;
+bool OrderPlaced = false;
 //---
 int digit1=Digits();
 int dig;
@@ -158,6 +158,76 @@ int PriceAction()
    return 0;
   }
 
+const ENUM_TIMEFRAMES HighLevelTimeFrame = PERIOD_H1;
+int PriceActionHL()
+  {
+   dig=digit1-1;
+//---- Candle1 OHLC
+   double O1=NormalizeDouble(iOpen(Symbol(),HighLevelTimeFrame,2),dig);
+   double H1=NormalizeDouble(iHigh(Symbol(),HighLevelTimeFrame,2),dig);
+   double L1=NormalizeDouble(iLow(Symbol(),HighLevelTimeFrame,2),dig);
+   double C1=NormalizeDouble(iClose(Symbol(),HighLevelTimeFrame,2),dig);
+//---- Candle2 OHLC
+   double O2=NormalizeDouble(iOpen(Symbol(),HighLevelTimeFrame,1),dig);
+   double H2=NormalizeDouble(iHigh(Symbol(),HighLevelTimeFrame,1),dig);
+   double L2=NormalizeDouble(iLow(Symbol(),HighLevelTimeFrame,1),dig);
+   double C2=NormalizeDouble(iClose(Symbol(),HighLevelTimeFrame,1),dig);
+//---- Candle3 OHLC
+   double O3=NormalizeDouble(iOpen(Symbol(),HighLevelTimeFrame,0),dig);
+   double H3=NormalizeDouble(iHigh(Symbol(),HighLevelTimeFrame,0),dig);
+   double L3=NormalizeDouble(iLow(Symbol(),HighLevelTimeFrame,0),dig);
+   double C3=NormalizeDouble(iClose(Symbol(),HighLevelTimeFrame,0),dig);
+
+   int type = 0;
+
+//--- Pattern 1 - bullish
+   if(C1>=O1 && L1<O1 && ((O1-L1)>(C1-O1)) && C2>=O2 && C2>H1 && L2>L1)
+     {
+      return 1;
+     }
+//--- Pattern 2 - bullish
+   else
+      if(C1<O1 && C2>O2 && ((O1-C1)>(H1-O1)) && ((O1-C1)>(C1-L1)) && ((C2-O2)>(H2-C2)) && ((C2-O2)>(O2-L2)) && O2<=C1 && O2>=L1 && C2>=O1 && C2<=H1)
+        {
+         return 1;
+        }
+      //--- Pattern 3 - bullish
+      else
+         if(C1>O1 && ((C2-O2)>=(H2-C2)) && C2>O2 && C2>C1)
+           {
+            return 1;
+           }
+
+//---- Pattern 1 - bearish
+   if(C1 <= O1 && ((H1 - O1) > (O1 - C1)) && (C2 <= O2) && (C2 < L1) && (H2 < H1))
+     {
+      //Print("Shooting start + Big black candle");
+      return -1;
+     }
+//---- Pattern 2 - bearish
+   if(C1>O1 && C2<O2 && ((C1-O1)>(H1-C1)) && ((C1-O1)>(O1-L1)) && ((O2-C2)>(H2-O2)) && ((O2-C2)>(C2-L2)) && O2>=C1 && O2<=H1 && C2<=O1 && C2>=L1)
+     {
+      return -1;
+     }
+//---- Pattern 3 - bearish
+   else
+      if(C1 < O1 && ((O2 - C2) >= (C2 - L2)) && C2 < O2 && C2 < C1)
+        {
+         return -1;
+        }
+
+      //---- Bullish Engulfing candle.
+      else
+         if(O2 > C2 && C1 > O1 && O2 > C1 && O1 > C2)
+           {
+            return -1;
+           }
+         else
+            if(O2 > C2 && C2 > O3 && C2 > C3)
+               return -1;
+
+   return 0;
+  }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -202,7 +272,7 @@ double prHigh(int i)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-void FindLevel()
+int FindLevel()
   {
 //int    counted_bars=IndicatorCounted();
    int Bars = Bars(_Symbol, PERIOD_M1);
@@ -258,11 +328,17 @@ void FindLevel()
          CrossBarsMin[di]=true;
 
          // set ref value.
-         PrintFormat("key level = %.2f", d);
+         //PrintFormat("key level = %.2f", d);
          index ++;
          Refs[index] = d;
         }
      }
+
+   return index;
+  }
+//---
+void UpdateKeyLevels(int index)
+  {
    if(index > -1)
      {
       int i;
@@ -286,10 +362,9 @@ void FindLevel()
         }
 
       refIndex = index;
-      PrintFormat("refs no. = %d", refIndex);
+      //PrintFormat("refs no. = %d", refIndex);
      }
   }
-
 
 //+------------------------------------------------------------------+
 //| ZigZag calculation                                               |
@@ -317,7 +392,7 @@ enum EnSearchMode
    Bottom=-1   // searching for the next ZigZag bottom
   };
 
-ENUM_TIMEFRAMES zzTimeFrame = PERIOD_M5;
+ENUM_TIMEFRAMES zzTimeFrame = PERIOD_M1;
 
 //+------------------------------------------------------------------+
 double Low(int shift)
@@ -343,7 +418,7 @@ datetime Time(int shift)
    return iTime(_Symbol, zzTimeFrame, shift);
   }
 //+------------------------------------------------------------------+
-//|                                                                  |
+//| Calculate ZigZag Lines for Swing High/Low Trading                |
 //+------------------------------------------------------------------+
 const int SwingTimeSpan = 240;
 int CalculateHighLow()
@@ -498,7 +573,88 @@ int CalculateHighLow()
    return 0;
   }
 //+------------------------------------------------------------------+
+void InitZigZagLines()
+  {
+   color lineColors[6] = { clrTomato, clrYellow, clrViolet, clrDodgerBlue, clrAqua, clrBlue };
+   for(int i = 0; i < 6; i ++)
+     {
+      const string id = "zigzag-" + i;
+      ObjectCreate(0, id, OBJ_TREND, 0, 0, 0);
+      ObjectSetInteger(0, id, OBJPROP_COLOR, lineColors[i]);
+      ObjectSetInteger(0, id, OBJPROP_WIDTH, 2);
+      ObjectSetInteger(0, id, OBJPROP_STYLE, STYLE_SOLID);
+      ObjectSetInteger(0, id, OBJPROP_HIDDEN, true);
+     }
+  }
+//+------------------------------------------------------------------+
+//| Update ZigZag Lines.                                             |
+//+------------------------------------------------------------------+
+void UpdateZigZagLines()
+  {
+   int i;
+   for(i = 0; i < zzIndex - 1; i ++)
+     {
+      const string id = "zigzag-" + i;
+      ObjectMove(0, id, 0, zzTime[i], zzPrices[i]);
+      ObjectMove(0, id, 1, zzTime[i + 1], zzPrices[i + 1]);
+      ObjectSetInteger(0, id, OBJPROP_HIDDEN, false);
+     }
 
+   for(; i < 6; i ++)
+     {
+      const string id = "zigzag-" + i;
+      ObjectSetInteger(0, id, OBJPROP_HIDDEN, true);
+     }
+  }
+//+------------------------------------------------------------------+
+//| Swing High Trading                                               |
+//+------------------------------------------------------------------+
+bool CheckSwingHigh()
+  {
+   //int highPos = iHighest(_Symbol, PERIOD_M5, MODE_CLOSE, 24, 0);
+   //int lowPos = iLowest(_Symbol, PERIOD_M5, MODE_CLOSE, 24, 0);
+
+   //if(highPos > lowPos || highPos > 8)
+   //   return false;
+//Print("trend high ...");
+
+   if(zzIndex < 7)
+      return false;
+   if(zzPrices[6] > zzPrices[5])
+      return false;
+   if(zzPrices[5] > zzPrices[3])
+      return false;
+   if(zzPrices[3] > zzPrices[1])
+      return false;
+
+//if (zzPrices[6] > zzPrices[4]) return ;
+
+   if(zzPrices[5] < zzPrices[4])
+      return false;
+   if(zzPrices[3] < zzPrices[2])
+      return false;
+
+   if(zzPrices[0] <= zzPrices[3])
+      return false;
+
+   if(zzPrices[0] >= zzPrices[1])
+      return false;
+
+// Place order when bullish.
+   if(PriceActionHL() == BEARISH)
+     {
+      Print("Avoid Bearish !!!");
+      return false;
+     }
+
+// Passed, place order.
+   double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+
+   IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPrices[2] - (sl*10*_Point),Ask + (tp*10*_Point));
+   return IsOrderOpen;
+  }
+  
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
@@ -513,19 +669,11 @@ int OnInit()
    ArrayResize(HighMapBuffer, SwingTimeSpan);
 
 //--- create zigzag lines.
-   color lineColors[6] = { clrTomato, clrYellow, clrViolet, clrDodgerBlue, clrAqua, clrBlue };
-   for(int i = 0; i < 6; i ++)
-     {
-      const string id = "zigzag-" + i;
-      ObjectCreate(0, id, OBJ_TREND, 0, 0, 0);
-      ObjectSetInteger(0, id, OBJPROP_COLOR, lineColors[i]);
-      ObjectSetInteger(0, id, OBJPROP_WIDTH, 2);
-      ObjectSetInteger(0, id, OBJPROP_STYLE, STYLE_SOLID);
-      ObjectSetInteger(0, id, OBJPROP_HIDDEN, true);
-     }
+   InitZigZagLines();
 
    return(INIT_SUCCEEDED);
   }
+
 //+------------------------------------------------------------------+
 //| Expert deinitialization function                                 |
 //+------------------------------------------------------------------+
@@ -542,7 +690,7 @@ void OnTick()
   {
 //---
 
-   if(orderplaced && (Time(0) - OrderTime) > MinHoldTime)
+   if(OrderPlaced && (Time(0) - OrderTime) > MinHoldTime)
      {
       dig=digit1-1;
       //---- Candle1 OHLC
@@ -639,8 +787,8 @@ void OnTick()
         {
          if(CloseOrder(lots))
            {
-            orderopen = false;
-            orderplaced = false;
+            IsOrderOpen = false;
+            OrderPlaced = false;
             if(refHit)
               {
                refHit = false;
@@ -665,94 +813,39 @@ const int BEARISH = -1;
 //---
 void OnTimer()
   {
-//---
-   FindLevel();
+   int n = FindLevel();
+   UpdateKeyLevels(n);
+
    CalculateHighLow();
-
-// update ZigZag Lines.
-   int i;
-   for(i = 0; i < zzIndex - 1; i ++)
-     {
-      const string id = "zigzag-" + i;
-      ObjectMove(0, id, 0, zzTime[i], zzPrices[i]);
-      ObjectMove(0, id, 1, zzTime[i + 1], zzPrices[i + 1]);
-      ObjectSetInteger(0, id, OBJPROP_HIDDEN, false);
-     }
-
-   for(; i < 6; i ++)
-     {
-      const string id = "zigzag-" + i;
-      ObjectSetInteger(0, id, OBJPROP_HIDDEN, true);
-     }
+   UpdateZigZagLines();
 
 // is time to place order ?
-//if(refIndex >= 0 && !orderopen)
-   if(!orderopen)
+   if(!IsOrderOpen)
      {
-      int highPos = iHighest(_Symbol, PERIOD_M5, MODE_CLOSE, 24, 0);
-      int lowPos = iLowest(_Symbol, PERIOD_M5, MODE_CLOSE, 24, 0);
-
-      if(highPos > lowPos || highPos > 8)
-         return ;
-      //Print("trend high ...");
-
-      if(zzIndex < 7)
-         return ;
-      if(zzPrices[6] > zzPrices[5])
-         return ;
-      if(zzPrices[5] > zzPrices[3])
-         return ;
-      if(zzPrices[3] > zzPrices[1])
-         return ;
-
-      //if (zzPrices[6] > zzPrices[4]) return ;
-
-      if(zzPrices[5] < zzPrices[4])
-         return ;
-      if(zzPrices[3] < zzPrices[2])
-         return ;
-
-      if(zzPrices[0] <= zzPrices[3])
-         return ;
-
-      if(zzPrices[0] >= zzPrices[1])
-         return ;
-
-      // Place order when bullish.
-      if(PriceAction() == -1)
-        {
-         Print("Avoid Bearish !!!");
-         return ;
-        }
-
-      // Passed, place order.
-      double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-      double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-
-      orderopen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPrices[2] - (sl*10*_Point),Ask + (tp*10*_Point));
+      CheckSwingHigh();
      }
 
 //--- Handle order.
-   if(orderplaced == true)
+   if(OrderPlaced == true)
      {
       if(PositionsTotal() == 0)
         {
          Print("Order Closed");
-         orderopen = false;
-         orderplaced = false;
+         IsOrderOpen = false;
+         OrderPlaced = false;
         }
      }
    else
-      if(orderopen == true)
+      if(IsOrderOpen == true)
         {
          if(PositionsTotal() > 0)
            {
-            orderplaced = true;
+            OrderPlaced = true;
            }
          else
            {
-            orderopen = false;
-            orderplaced = false;
+            IsOrderOpen = false;
+            OrderPlaced = false;
            }
         }
   }
@@ -765,4 +858,3 @@ void OnTrade()
 
   }
 //+------------------------------------------------------------------+
-
