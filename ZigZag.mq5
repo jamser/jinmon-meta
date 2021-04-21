@@ -88,6 +88,17 @@ bool OrderPlaced = false;
 int digit1=Digits();
 int dig;
 //---
+bool IsBearishEngulfing(MqlRates& p, MqlRates& pp)
+{
+   if(p.open > p.close &&
+      pp.close > pp.open &&
+      p.open >= pp.close &&
+      pp.open > p.close)
+      return true;
+   else
+      return false;   
+}
+
 int PriceAction()
   {
    dig=digit1-1;
@@ -607,54 +618,135 @@ void UpdateZigZagLines()
      }
   }
 //+------------------------------------------------------------------+
+//| Swigh-High Price Action Detector                                 |
+//+------------------------------------------------------------------+
+bool SwingHighPADetector(int type)
+  {
+   MqlRates prices[], p, pp, ppp;
+   ArraySetAsSeries(prices, true);
+
+//--- 最新的K線還沒完成，略過，不參考．
+   CopyRates(_Symbol, zzTimeFrame, 1, 5, prices);
+
+   switch(type)
+     {
+      case 1:
+         //--- 平穩上升：下方要有支撐。
+         for(int i = 0; i < 3; i ++)
+           {
+            p = prices[i];
+            //--- upside down hammer.
+            if(p.open > p.close &&
+               (p.high - p.open) > (p.open - p.close) &&
+               (p.open - p.close) > (p.close - p.low))
+              {
+               // 如果之前是 Bearish Engulfing 那就不行！
+               pp = prices[i + 1];
+               ppp = prices[i + 2];
+               if (!IsBearishEngulfing(pp, ppp))
+                  return true;
+               else
+                  return false;
+              }
+
+            //--- hammer.
+            if(p.close > p.open &&
+               (p.open - p.low) > (p.close - p.open) &&
+               (p.close - p.open) > (p.high - p.close))
+               return true;
+           }
+         break;
+      case 2:
+         //--- 牛市直衝
+         for(int i = 0; i < 2; i ++)
+           {
+            p = prices[i];
+            pp = prices[i + 1];
+            if(p.close > p.open &&
+               (p.open >= pp.high) &&
+               (p.high - p.close) < (p.close - p.open))
+               return true;
+
+           }
+         break;
+     }
+   return false;
+  }
+//+------------------------------------------------------------------+
 //| Swing High Trading                                               |
 //+------------------------------------------------------------------+
 bool CheckSwingHigh()
   {
-   //int highPos = iHighest(_Symbol, PERIOD_M5, MODE_CLOSE, 24, 0);
-   //int lowPos = iLowest(_Symbol, PERIOD_M5, MODE_CLOSE, 24, 0);
+//int highPos = iHighest(_Symbol, PERIOD_M5, MODE_CLOSE, 24, 0);
+//int lowPos = iLowest(_Symbol, PERIOD_M5, MODE_CLOSE, 24, 0);
 
-   //if(highPos > lowPos || highPos > 8)
-   //   return false;
+//if(highPos > lowPos || highPos > 8)
+//   return false;
 //Print("trend high ...");
 
-   if(zzIndex < 7)
-      return false;
-   if(zzPrices[6] > zzPrices[5])
-      return false;
-   if(zzPrices[5] > zzPrices[3])
-      return false;
-   if(zzPrices[3] > zzPrices[1])
-      return false;
+//+------------------------------------------------------------------+
+//|     牛市直衝                                                       |
+//+------------------------------------------------------------------+
+//|                      + 0                                         |
+//|                     /                                            |
+//|                    /                                             |
+//|               + 2 /                                              |
+//|        + 4   / \ /                                               |
+//|       / \   /   + 1                                              |
+//|      /   \ /                                                     |
+//|     /     + 3                                                    |
+//|    /                                                             |
+//|   + 5                                                            |
+//+------------------------------------------------------------------+
+   if(zzIndex >= 5 &&
+      zzPrices[4] > zzPrices[3] &&
+      zzPrices[2] > zzPrices[1] &&
 
-//if (zzPrices[6] > zzPrices[4]) return ;
-
-   if(zzPrices[5] < zzPrices[4])
-      return false;
-   if(zzPrices[3] < zzPrices[2])
-      return false;
-
-   if(zzPrices[0] <= zzPrices[3])
-      return false;
-
-   if(zzPrices[0] >= zzPrices[1])
-      return false;
-
-// Place order when bullish.
-   if(PriceActionHL() == BEARISH)
+      zzPrices[1] > zzPrices[3] &&
+      zzPrices[2] > zzPrices[4] &&
+      zzPrices[0] > zzPrices[2] &&
+      SwingHighPADetector(2))
      {
-      Print("Avoid Bearish !!!");
-      return false;
+      double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+      double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+
+      IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPrices[1] - (sl*10*_Point),Ask + (tp*10*_Point));
      }
 
-// Passed, place order.
-   double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-   double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+//+------------------------------------------------------------------+
+//|     平穩上升                                                      |
+//+------------------------------------------------------------------+
+//|                   + 1                                            |
+//|                  / \                                             |
+//|                 /   + 0                                          |
+//|            + 3 /                                                 |
+//|       + 5 / \ /                                                  |
+//|      / \ /   + 2                                                 |
+//|     /   + 4                                                      |
+//+------------------------------------------------------------------+
+   if(zzIndex >= 5 &&
+      zzPrices[5] > zzPrices[4] &&
+      zzPrices[3] > zzPrices[2] &&
+      zzPrices[1] > zzPrices[0] &&
 
-   IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPrices[2] - (sl*10*_Point),Ask + (tp*10*_Point));
+// trend high
+      zzPrices[2] > zzPrices[4] &&
+
+      zzPrices[1] > zzPrices[3] &&
+      zzPrices[0] > zzPrices[3] &&
+
+      zzPrices[3] >= zzPrices[5] &&
+      SwingHighPADetector(1))
+     {
+      double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+      double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+
+      IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPrices[2] - (sl*10*_Point),Ask + (tp*10*_Point));
+     }
+
    return IsOrderOpen;
   }
-  
+
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
@@ -857,4 +949,6 @@ void OnTrade()
 //---
 
   }
+//+------------------------------------------------------------------+
+
 //+------------------------------------------------------------------+
