@@ -76,29 +76,48 @@ bool CloseOrder(double volume)
    return false;
   }
 
+//+------------------------------------------------------------------+
+//| Order Management                                                 |
+//+------------------------------------------------------------------+
 //--- input parameters
 input double   lots=0.1;
 input double   tp=21;
 input double   sl=14;
 
-//--- Price Action Recognition.
 bool IsOrderOpen = false;
 bool OrderPlaced = false;
+
+//--- Price Action Recognition.
 //---
 int digit1=Digits();
 int dig;
-//---
+//--- Bearish Engulfing.
 bool IsBearishEngulfing(MqlRates& p, MqlRates& pp)
-{
+  {
    if(p.open > p.close &&
       pp.close > pp.open &&
       p.open >= pp.close &&
       pp.open > p.close)
       return true;
    else
-      return false;   
-}
+      return false;
+  }
 
+//--- Bullish Engulfing.
+bool IsBullishEngulfing(MqlRates& p, MqlRates& pp)
+  {
+   if(p.close > p.open &&
+      pp.open > pp.close &&
+      p.open <= pp.close &&
+      p.close > pp.open)
+      return true;
+   else
+      return false;
+  }
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 int PriceAction()
   {
    dig=digit1-1;
@@ -392,9 +411,13 @@ double    LowMapBuffer[];      // ZigZag low extremes (bottoms)
 
 int       ExtRecalc=3;         // number of last extremes for recalculation
 
-int zzIndex = 0;
-double zzPrices[7];
-datetime zzTime[7];
+int zzIndexM1 = 0;
+double zzPricesM1[7];
+datetime zzTimesM1[7];
+
+int zzIndexM5 = 0;
+double zzPricesM5[7];
+datetime zzTimesM5[7];
 
 enum EnSearchMode
   {
@@ -403,24 +426,14 @@ enum EnSearchMode
    Bottom=-1   // searching for the next ZigZag bottom
   };
 
+MqlRates m1Rates[];
+MqlRates m5Rates[];
+
+const int SwingTimeSpan = 240;
+
 ENUM_TIMEFRAMES zzTimeFrame = PERIOD_M1;
+ENUM_TIMEFRAMES zzHighTimeFrame = PERIOD_M15;
 
-//+------------------------------------------------------------------+
-double Low(int shift)
-  {
-   return iLow(_Symbol, zzTimeFrame, shift);
-  }
-
-//+------------------------------------------------------------------+
-double High(int shift)
-  {
-   return iHigh(_Symbol, zzTimeFrame, shift);
-  }
-//+------------------------------------------------------------------+
-double Close(int shift)
-  {
-   return iClose(_Symbol, zzTimeFrame, shift);
-  }
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
@@ -431,11 +444,11 @@ datetime Time(int shift)
 //+------------------------------------------------------------------+
 //| Calculate ZigZag Lines for Swing High/Low Trading                |
 //+------------------------------------------------------------------+
-const int SwingTimeSpan = 240;
-int CalculateHighLow()
+int CalculateZigZag(MqlRates& prices[], double& zzPrices[], datetime& zzTimes[])
   {
-   if(Bars(_Symbol, zzTimeFrame) < SwingTimeSpan)
-      return(0);
+   int span = ArraySize(prices);
+   if(ArraySize(prices) < span)
+      return 0;
 
 //---
    int    i=0;
@@ -450,13 +463,13 @@ int CalculateHighLow()
    ArrayInitialize(LowMapBuffer,0.0);
    start = InpDepth;
 
-   int dir = (Close(SwingTimeSpan - 2) > Close(SwingTimeSpan - 1) ? 1 : -1);
+   double pv = prices[span - 1].close;
+   int dir = (prices[span - 2].close > pv ? 1 : -1);
 
 //--- searching for high and low extremes
-   double pv = Close(SwingTimeSpan - 1);
-   for(shift = SwingTimeSpan - 2; shift >= 0; shift --)
+   for(shift = span - 2; shift >= 0; shift --)
      {
-      val = Close(shift);
+      val = prices[shift].close;
       if(dir == 1)
         {
          if(pv > val)
@@ -492,8 +505,7 @@ int CalculateHighLow()
    last_high = 0.0;
 
 //--- final selection of extreme points for ZigZag
-   for(shift = SwingTimeSpan - 1; shift >= 0; shift --)
-      //for (shift = 0; shift < SwingTimeSpan; shift ++)
+   for(shift = span - 1; shift >= 0; shift --)
      {
       res = 0.0;
       switch(extreme_search)
@@ -501,19 +513,17 @@ int CalculateHighLow()
          case Extremum:
             if(last_low == 0.0 && last_high == 0.0)
               {
-               /*
-                if(HighMapBuffer[shift] != 0)
-                  {
-                   last_high = High(shift);
-                   last_high_pos = shift;
-                   extreme_search = Bottom;
-                   ZigZagBuffer[shift] = last_high;
-                   res = 1;
-                  }
-                  */
+               if(HighMapBuffer[shift] != 0)
+                 {
+                  last_high = prices[shift].close;
+                  last_high_pos = shift;
+                  extreme_search = Bottom;
+                  ZigZagBuffer[shift] = last_high;
+                  res = 1;
+                 }
                if(LowMapBuffer[shift] != 0.0)
                  {
-                  last_low = Low(shift);
+                  last_low = prices[shift].close;
                   last_low_pos = shift;
                   extreme_search = Peak;
                   ZigZagBuffer[shift] = last_low;
@@ -526,11 +536,6 @@ int CalculateHighLow()
               {
                val = HighMapBuffer[shift];
 
-               // noise filtering.
-               //               if (val - last_low < InpDeviation * _Point) {
-               //                  ZigZagBuffer[last_low_pos] = 0.0;
-               //               }
-               //               else {
                if(val - last_low > InpDeviation * _Point)
                  {
                   last_high = val;
@@ -547,11 +552,6 @@ int CalculateHighLow()
               {
                val = LowMapBuffer[shift];
 
-               // noise filtering.
-               //               if (last_high - val < InpDeviation * _Point) {
-               //                  ZigZagBuffer[last_high_pos] = 0.0;
-               //               }
-               //               else {
                if(last_high - val > InpDeviation * _Point)
                  {
                   last_low = val;
@@ -568,20 +568,19 @@ int CalculateHighLow()
         }
      }
 
-   zzIndex = 0;
-//Print("---- zz ----");
-   for(shift = 0; shift < SwingTimeSpan; shift ++)
+   //Print("---- zz ----");
+   for(i = 0, shift = 0; shift < span; shift ++)
      {
       // find out prices and times.
-      if(ZigZagBuffer[shift] > 0 && zzIndex < 7)
+      if(ZigZagBuffer[shift] > 0 && i < 7)
         {
-         zzPrices[zzIndex] = ZigZagBuffer[shift];
-         zzTime[zzIndex] = Time(shift);
-         zzIndex ++;
+         zzPrices[i] = ZigZagBuffer[shift];
+         zzTimes[i] = prices[shift].time;
+         i ++;
          //Print(zzIndex + " P = ", ZigZagBuffer[shift], " : ", shift);
         }
      }
-   return 0;
+   return i;
   }
 //+------------------------------------------------------------------+
 void InitZigZagLines()
@@ -603,11 +602,11 @@ void InitZigZagLines()
 void UpdateZigZagLines()
   {
    int i;
-   for(i = 0; i < zzIndex - 1; i ++)
+   for(i = 0; i < zzIndexM1 - 1; i ++)
      {
       const string id = "zigzag-" + i;
-      ObjectMove(0, id, 0, zzTime[i], zzPrices[i]);
-      ObjectMove(0, id, 1, zzTime[i + 1], zzPrices[i + 1]);
+      ObjectMove(0, id, 0, zzTimesM1[i], zzPricesM1[i]);
+      ObjectMove(0, id, 1, zzTimesM1[i + 1], zzPricesM1[i + 1]);
       ObjectSetInteger(0, id, OBJPROP_HIDDEN, false);
      }
 
@@ -643,7 +642,7 @@ bool SwingHighPADetector(int type)
                // 如果之前是 Bearish Engulfing 那就不行！
                pp = prices[i + 1];
                ppp = prices[i + 2];
-               if (!IsBearishEngulfing(pp, ppp))
+               if(!IsBearishEngulfing(pp, ppp))
                   return true;
                else
                   return false;
@@ -658,6 +657,9 @@ bool SwingHighPADetector(int type)
          break;
       case 2:
          //--- 牛市直衝
+         if (CheckHighLeveTrend() == TREND_HIGH)
+            return false;
+         
          for(int i = 0; i < 2; i ++)
            {
             p = prices[i];
@@ -677,13 +679,6 @@ bool SwingHighPADetector(int type)
 //+------------------------------------------------------------------+
 bool CheckSwingHigh()
   {
-//int highPos = iHighest(_Symbol, PERIOD_M5, MODE_CLOSE, 24, 0);
-//int lowPos = iLowest(_Symbol, PERIOD_M5, MODE_CLOSE, 24, 0);
-
-//if(highPos > lowPos || highPos > 8)
-//   return false;
-//Print("trend high ...");
-
 //+------------------------------------------------------------------+
 //|     牛市直衝                                                       |
 //+------------------------------------------------------------------+
@@ -698,19 +693,19 @@ bool CheckSwingHigh()
 //|    /                                                             |
 //|   + 5                                                            |
 //+------------------------------------------------------------------+
-   if(zzIndex >= 5 &&
-      zzPrices[4] > zzPrices[3] &&
-      zzPrices[2] > zzPrices[1] &&
+   if(zzIndexM1 >= 5 &&
+      zzPricesM1[4] > zzPricesM1[3] &&
+      zzPricesM1[2] > zzPricesM1[1] &&
 
-      zzPrices[1] > zzPrices[3] &&
-      zzPrices[2] > zzPrices[4] &&
-      zzPrices[0] > zzPrices[2] &&
+      zzPricesM1[1] > zzPricesM1[3] &&
+      zzPricesM1[2] > zzPricesM1[4] &&
+      zzPricesM1[0] > zzPricesM1[2] &&
       SwingHighPADetector(2))
      {
       double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
       double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
 
-      IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPrices[1] - (sl*10*_Point),Ask + (tp*10*_Point));
+      IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[1] - (sl*10*_Point),Ask + (tp*10*_Point));
      }
 
 //+------------------------------------------------------------------+
@@ -724,29 +719,109 @@ bool CheckSwingHigh()
 //|      / \ /   + 2                                                 |
 //|     /   + 4                                                      |
 //+------------------------------------------------------------------+
-   if(zzIndex >= 5 &&
-      zzPrices[5] > zzPrices[4] &&
-      zzPrices[3] > zzPrices[2] &&
-      zzPrices[1] > zzPrices[0] &&
+   if(zzIndexM1 >= 5 &&
+      zzPricesM1[5] > zzPricesM1[4] &&
+      zzPricesM1[3] > zzPricesM1[2] &&
+      zzPricesM1[1] > zzPricesM1[0] &&
 
 // trend high
-      zzPrices[2] > zzPrices[4] &&
+      zzPricesM1[2] > zzPricesM1[4] &&
 
-      zzPrices[1] > zzPrices[3] &&
-      zzPrices[0] > zzPrices[3] &&
+      zzPricesM1[1] > zzPricesM1[3] &&
+      zzPricesM1[0] > zzPricesM1[3] &&
 
-      zzPrices[3] >= zzPrices[5] &&
+      zzPricesM1[3] >= zzPricesM1[5] &&
       SwingHighPADetector(1))
      {
       double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
       double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
 
-      IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPrices[2] - (sl*10*_Point),Ask + (tp*10*_Point));
+      IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[2] - (sl*10*_Point),Ask + (tp*10*_Point));
      }
 
    return IsOrderOpen;
   }
 
+//+------------------------------------------------------------------+
+//| Swing High Trading                                               |
+//+------------------------------------------------------------------+
+enum HIGH_LEVEL_TREND {
+   TREND_HIGH = 1,
+   TREND_LOW = -1,
+};
+
+HIGH_LEVEL_TREND CheckHighLeveTrend()
+  {
+//+------------------------------------------------------------------+
+//|     牛市直衝                                                       |
+//+------------------------------------------------------------------+
+//|                      + 0                                         |
+//|                     /                                            |
+//|                    /                                             |
+//|               + 2 /                                              |
+//|        + 4   / \ /                                               |
+//|       / \   /   + 1                                              |
+//|      /   \ /                                                     |
+//|     /     + 3                                                    |
+//|    /                                                             |
+//|   + 5                                                            |
+//+------------------------------------------------------------------+
+   if(zzIndexM5 >= 5 &&
+      zzPricesM5[4] > zzPricesM5[3] &&
+      zzPricesM5[2] > zzPricesM5[1] &&
+
+      zzPricesM5[1] > zzPricesM5[3] &&
+      zzPricesM5[2] > zzPricesM5[4] &&
+      zzPricesM5[0] > zzPricesM5[2])
+      return TREND_HIGH;
+
+//+------------------------------------------------------------------+
+//|     上升三角                                                      |
+//+------------------------------------------------------------------+
+//|                     + 0                                          |
+//|                    /                                             |
+//|         + 4   + 2 /                                              |
+//|        / \   / \ /                                               |
+//|       /   \ /   + 1                                              |
+//|      /     + 3                                                   |
+//|     + 5                                                          |
+//+------------------------------------------------------------------+
+   if(zzIndexM1 >= 5 &&
+      zzPricesM5[4] > zzPricesM5[3] &&
+      zzPricesM5[2] > zzPricesM5[1] &&
+
+      zzPricesM5[1] > zzPricesM5[3] &&
+      zzPricesM5[0] > zzPricesM5[2] &&
+      zzPricesM5[0] > zzPricesM5[4])
+      return TREND_HIGH;
+
+//+------------------------------------------------------------------+
+//|     平穩上升                                                      |
+//+------------------------------------------------------------------+
+//|                   + 1                                            |
+//|                  / \                                             |
+//|                 /   + 0                                          |
+//|            + 3 /                                                 |
+//|       + 5 / \ /                                                  |
+//|      / \ /   + 2                                                 |
+//|     /   + 4                                                      |
+//+------------------------------------------------------------------+
+   if(zzIndexM1 >= 5 &&
+      zzPricesM5[5] > zzPricesM5[4] &&
+      zzPricesM5[3] > zzPricesM5[2] &&
+      zzPricesM5[1] > zzPricesM5[0] &&
+
+      zzPricesM5[2] > zzPricesM5[4] &&
+
+      zzPricesM5[1] > zzPricesM5[3] &&
+      zzPricesM5[0] > zzPricesM5[3] &&
+
+      zzPricesM5[3] >= zzPricesM5[5])
+      return TREND_HIGH;
+
+   return TREND_LOW;
+  }
+  
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
@@ -762,6 +837,10 @@ int OnInit()
 
 //--- create zigzag lines.
    InitZigZagLines();
+
+//--- Init ZigZag Lines Data.
+   ArraySetAsSeries(m1Rates, true);
+   ArraySetAsSeries(m5Rates, true);
 
    return(INIT_SUCCEEDED);
   }
@@ -902,16 +981,21 @@ void OnTick()
 const int BULLISH = 1;
 const int BEARISH = -1;
 
+int HighLevelZZ = 5;
 //---
 void OnTimer()
   {
    int n = FindLevel();
    UpdateKeyLevels(n);
 
-   CalculateHighLow();
+   CopyRates(_Symbol, zzTimeFrame, 1, SwingTimeSpan, m1Rates);
+   zzIndexM1 = CalculateZigZag(m1Rates, zzPricesM1, zzTimesM1);
    UpdateZigZagLines();
 
-// is time to place order ?
+   CopyRates(_Symbol, zzHighTimeFrame, 1, SwingTimeSpan / 5, m5Rates);
+   zzIndexM5 = CalculateZigZag(m5Rates, zzPricesM5, zzTimesM5);
+
+   // is time to place order ?
    if(!IsOrderOpen)
      {
       CheckSwingHigh();
