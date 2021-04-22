@@ -14,8 +14,12 @@
 
 input long order_magic = 55555;
 
-const int SELL_ORDER = -1;
-const int BUY_ORDER = 1;
+enum ORDER_CMD
+  {
+   SELL_ORDER = -1,
+   NONE_ORDER = 0,
+   BUY_ORDER = 1,
+  };
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -23,14 +27,15 @@ const int BUY_ORDER = 1;
 CPositionInfo position;
 CTrade trade;
 
-int MinHoldTime = 10*60;   // seconds
+int MinHoldTime = 10 * 60;   // seconds
 double OrderPrice = 0.0;
 datetime OrderTime;
+ORDER_CMD OrderType = NONE_ORDER;
 
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-ulong PlaceOrder(int cmd, double volume, double price, int slippage, double stoploss, double takeprofit)
+ulong PlaceOrder(ORDER_CMD type, double volume, double price, int slippage, double stoploss)
   {
 //--- MQL4
    /*
@@ -42,18 +47,21 @@ ulong PlaceOrder(int cmd, double volume, double price, int slippage, double stop
    request.action = TRADE_ACTION_DEAL;
    request.magic = order_magic;
    request.symbol = _Symbol;
-   request.type = (cmd == SELL_ORDER ? ORDER_TYPE_SELL : ORDER_TYPE_BUY);
+   request.type = (type == SELL_ORDER ? ORDER_TYPE_SELL : ORDER_TYPE_BUY);
    request.volume = volume;
    request.deviation = slippage;
    request.sl = stoploss;
 //request.tp = takeprofit;
    request.price = price;
+   request.comment = "EA";
 
    MqlTradeResult result = {0};
    if(trade.OrderSend(request, result))
      {
       OrderPrice = price;
       OrderTime = Time(0);
+      OrderType = type;
+
       Print(__FUNCTION__,":",result.comment);
       return true;
      }
@@ -91,25 +99,121 @@ bool OrderPlaced = false;
 //---
 int digit1=Digits();
 int dig;
-//--- Bearish Engulfing.
-bool IsBearishEngulfing(MqlRates& p, MqlRates& pp)
+
+//--- Shooting Star.
+bool IsShootingStar(MqlRates& p)
   {
-   if(p.open > p.close &&
-      pp.close > pp.open &&
-      p.open >= pp.close &&
-      pp.open > p.close)
+   if((p.close > p.open) &&
+      (p.high - p.close) > (p.close - p.open) &&
+      (p.close - p.open) > (p.open - p.low))
       return true;
    else
       return false;
   }
 
+//--- Negative Shooting Star.
+bool IsNgShootingStar(MqlRates& p)
+  {
+   if((p.open > p.close) &&
+      (p.high - p.open) > (p.open - p.close) &&
+      (p.open - p.close) > (p.close - p.low))
+      return true;
+   else
+      return false;
+  }
+
+//--- Hammer.
+bool IsHammer(MqlRates& p)
+  {
+   if((p.close > p.open) &&
+      (p.open - p.low) > (p.close - p.open) &&
+      (p.close - p.open) > (p.high - p.close))
+      return true;
+   else
+      return false;
+  }
+
+//--- Negative Hammer.
+bool IsNgHammer(MqlRates& p)
+  {
+   if((p.open > p.close) &&
+      (p.close - p.low) > (p.open - p.close) &&
+      (p.open - p.close) > (p.high - p.open))
+      return true;
+   else
+      return false;
+  }
+
+//--- Bearish Engulfing.
+bool IsBearishEngulfing(MqlRates& p, MqlRates& pp)
+  {
+   if((p.open > p.close) &&
+      (pp.close > pp.open) &&
+      (p.open >= pp.close) &&
+      (pp.open > p.close))
+      return true;
+   else
+      return false;
+  }
+
+//--- Bearish Doji.
+bool IsBearishDoji(MqlRates& p, MqlRates& pp)
+  {
+   if((pp.open >= pp.close) &&
+      (pp.high - pp.open) > (pp.open - pp.close) &&
+      (p.open >= p.close) &&
+      (pp.low > p.close) &&
+      (pp.high > p.high))
+      return true;
+   else
+      return false;
+  }
+
+//--- Bearish Hopping.
+bool IsBearishHopping(MqlRates& p, MqlRates& pp)
+  {
+   if((pp.close < pp.open) &&
+      (p.open - p.close) >= (p.close - p.low) &&
+      (p.close < p.open) &&
+      (p.open <= pp.close))
+      return true;
+   else
+      return false;
+  }
+
+
 //--- Bullish Engulfing.
 bool IsBullishEngulfing(MqlRates& p, MqlRates& pp)
   {
-   if(p.close > p.open &&
-      pp.open > pp.close &&
-      p.open <= pp.close &&
-      p.close > pp.open)
+   if((p.close > p.open) &&
+      (pp.open > pp.close) &&
+      (p.open <= pp.close) &&
+      (p.close > pp.open))
+      return true;
+   else
+      return false;
+  }
+
+//--- Bullish Doji.
+bool IsBullishDoji(MqlRates& p, MqlRates& pp)
+  {
+   if((pp.close >= pp.open) &&
+      (pp.open - pp.low) > (pp.close - pp.open) &&
+      (p.close >= p.open) &&
+      (p.open > pp.high) &&
+      (p.low > pp.low))
+      return true;
+   else
+      return false;
+  }
+
+//--- Bullish Hopping.
+bool IsBullishHopping(MqlRates& p, MqlRates& pp)
+  {
+   if((pp.close > pp.open) &&
+      (p.close > p.open) &&
+      (p.close - p.open) >= (p.high - p.close) &&
+      (p.open >= pp.close))
       return true;
    else
       return false;
@@ -274,7 +378,7 @@ double targetRef;
 int MaxLimit = 72;
 input int MaxCrossesLevel = 9;
 double MaxR = 0.1;
-ENUM_TIMEFRAMES TimeFrame = PERIOD_M5;
+ENUM_TIMEFRAMES TimeFrame = PERIOD_M15;
 //---
 int CrossBarsNum[];
 bool CrossBarsMin[];
@@ -415,9 +519,13 @@ int zzIndexM1 = 0;
 double zzPricesM1[7];
 datetime zzTimesM1[7];
 
-int zzIndexM5 = 0;
-double zzPricesM5[7];
-datetime zzTimesM5[7];
+int zzIndexMh = 0;
+double zzPricesMh[7];
+datetime zzTimesMh[7];
+
+int zzIndexMl = 0;
+double zzPricesMl[7];
+datetime zzTimesMl[7];
 
 enum EnSearchMode
   {
@@ -427,12 +535,14 @@ enum EnSearchMode
   };
 
 MqlRates m1Rates[];
-MqlRates m5Rates[];
+MqlRates mhRates[];
+MqlRates mlRates[];
 
 const int SwingTimeSpan = 240;
 
 ENUM_TIMEFRAMES zzTimeFrame = PERIOD_M1;
-ENUM_TIMEFRAMES zzHighTimeFrame = PERIOD_M15;
+ENUM_TIMEFRAMES zzHighTimeFrame = PERIOD_H1;
+ENUM_TIMEFRAMES zzLongTimeFrame = PERIOD_H1;
 
 //+------------------------------------------------------------------+
 //|                                                                  |
@@ -568,7 +678,7 @@ int CalculateZigZag(MqlRates& prices[], double& zzPrices[], datetime& zzTimes[])
         }
      }
 
-   //Print("---- zz ----");
+//Print("---- zz ----");
    for(i = 0, shift = 0; shift < span; shift ++)
      {
       // find out prices and times.
@@ -630,14 +740,15 @@ bool SwingHighPADetector(int type)
    switch(type)
      {
       case 1:
+         if(CheckHighLeveTrend() == TREND_LOW)
+            return false;
+
          //--- 平穩上升：下方要有支撐。
          for(int i = 0; i < 3; i ++)
            {
             p = prices[i];
             //--- upside down hammer.
-            if(p.open > p.close &&
-               (p.high - p.open) > (p.open - p.close) &&
-               (p.open - p.close) > (p.close - p.low))
+            if(IsNgShootingStar(p))
               {
                // 如果之前是 Bearish Engulfing 那就不行！
                pp = prices[i + 1];
@@ -649,26 +760,75 @@ bool SwingHighPADetector(int type)
               }
 
             //--- hammer.
-            if(p.close > p.open &&
-               (p.open - p.low) > (p.close - p.open) &&
-               (p.close - p.open) > (p.high - p.close))
+            if(IsHammer(p))
                return true;
            }
          break;
       case 2:
-         //--- 牛市直衝
-         if (CheckHighLeveTrend() == TREND_HIGH)
+         //--- 熊轉牛 / 直衝
+         if(CheckHighLeveTrend() == TREND_LOW)
             return false;
-         
+
          for(int i = 0; i < 2; i ++)
            {
             p = prices[i];
             pp = prices[i + 1];
-            if(p.close > p.open &&
-               (p.open >= pp.high) &&
-               (p.high - p.close) < (p.close - p.open))
+            if(IsBullishHopping(p, pp))
                return true;
+           }
+         break;
+     }
+   return false;
+  }
+//+------------------------------------------------------------------+
+//| Swigh-Low Price Action Detector                                 |
+//+------------------------------------------------------------------+
+bool SwingLowPADetector(int type)
+  {
+   MqlRates prices[], p, pp, ppp;
+   ArraySetAsSeries(prices, true);
 
+//--- 最新的K線還沒完成，略過，不參考．
+   CopyRates(_Symbol, zzTimeFrame, 1, 5, prices);
+
+   switch(type)
+     {
+      case 1:=
+         if(CheckHighLeveTrend() == TREND_HIGH)
+            return false;
+
+         //--- 平穩下降升：上方要有阻力。
+         for(int i = 0; i < 3; i ++)
+           {
+            p = prices[i];
+            //--- upside down hammer.
+            if(IsHammer(p))
+              {
+               // 如果之前是 Bullish Engulfing 那就不行！
+               pp = prices[i + 1];
+               ppp = prices[i + 2];
+               if(!IsBullishEngulfing(pp, ppp))
+                  return true;
+               else
+                  return false;
+              }
+
+            //--- negative shooting star.
+            if(IsNgShootingStar(p))
+               return true;
+           }
+         break;
+      case 2:
+         //--- 牛轉熊 / 直落
+         if(CheckHighLeveTrend() == TREND_HIGH)
+            return false;
+
+         for(int i = 0; i < 2; i ++)
+           {
+            p = prices[i];
+            pp = prices[i + 1];
+            if(IsBearishHopping(p, pp))
+               return true;
            }
          break;
      }
@@ -679,6 +839,12 @@ bool SwingHighPADetector(int type)
 //+------------------------------------------------------------------+
 bool CheckSwingHigh()
   {
+   if(IsOrderOpen)
+      return false;
+
+   double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+
 //+------------------------------------------------------------------+
 //|     牛市直衝                                                       |
 //+------------------------------------------------------------------+
@@ -702,10 +868,9 @@ bool CheckSwingHigh()
       zzPricesM1[0] > zzPricesM1[2] &&
       SwingHighPADetector(2))
      {
-      double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-      double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-
-      IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[1] - (sl*10*_Point),Ask + (tp*10*_Point));
+      IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[1] - (sl*10*_Point));
+      if(IsOrderOpen)
+         return true;
      }
 
 //+------------------------------------------------------------------+
@@ -733,25 +898,105 @@ bool CheckSwingHigh()
       zzPricesM1[3] >= zzPricesM1[5] &&
       SwingHighPADetector(1))
      {
-      double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-      double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-
-      IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[2] - (sl*10*_Point),Ask + (tp*10*_Point));
+      IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[2] - (sl*10*_Point));
+      if(IsOrderOpen)
+         return true;
      }
 
-   return IsOrderOpen;
+   return false;
   }
 
 //+------------------------------------------------------------------+
 //| Swing High Trading                                               |
 //+------------------------------------------------------------------+
-enum HIGH_LEVEL_TREND {
-   TREND_HIGH = 1,
-   TREND_LOW = -1,
-};
+bool CheckSwingLow()
+  {
+   if(IsOrderOpen)
+      return false;
 
+   double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+   double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+
+//+------------------------------------------------------------------+
+//|     熊市直落                                                       |
+//+------------------------------------------------------------------+
+//|   + 5                                                            |
+//|    \                                                             |
+//|     \     + 3                                                    |
+//|      \   / \                                                     |
+//|       \ /   \   + 1                                              |
+//|        + 4   \ / \                                               |
+//|               + 2 \                                              |
+//|                    \                                             |
+//|                     \                                            |
+//|                      + 0                                         |
+//+------------------------------------------------------------------+
+   if(zzIndexM1 >= 5 &&
+      zzPricesM1[4] < zzPricesM1[3] &&
+      zzPricesM1[2] < zzPricesM1[1] &&
+
+      zzPricesM1[1] < zzPricesM1[3] &&
+      zzPricesM1[2] < zzPricesM1[4] &&
+      zzPricesM1[0] < zzPricesM1[2] &&
+      SwingLowPADetector(2))
+     {
+      IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5,zzPricesM1[1] + (sl*10*_Point));
+      if(IsOrderOpen)
+         return true;
+     }
+
+//+------------------------------------------------------------------+
+//|     平穩下降                                                      |
+//+------------------------------------------------------------------+
+//|     \   + 4                                                      |
+//|      \ / \   + 2                                                 |
+//|       + 5 \ / \                                                  |
+//|            + 3 \                                                 |
+//|                 \   + 0                                          |
+//|                  \ /                                             |
+//|                   + 1                                            |
+//+------------------------------------------------------------------+
+   if(zzIndexM1 >= 5 &&
+      zzPricesM1[5] < zzPricesM1[4] &&
+      zzPricesM1[3] < zzPricesM1[2] &&
+      zzPricesM1[1] < zzPricesM1[0] &&
+
+      zzPricesM1[2] < zzPricesM1[4] &&
+
+      zzPricesM1[1] < zzPricesM1[3] &&
+      zzPricesM1[0] < zzPricesM1[3] &&
+
+      zzPricesM1[3] <= zzPricesM1[5] &&
+      SwingLowPADetector(1))
+     {
+      IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5,zzPricesM1[2] + (sl*10*_Point));
+      if(IsOrderOpen)
+         return true;
+     }
+
+   return false;
+  }
+
+//+-----------------------------------------------------------------s-+
+//| Swing High Trading                                               |
+//+------------------------------------------------------------------+
+enum HIGH_LEVEL_TREND
+  {
+   TREND_HIGH = 1,
+   TREND_NONE = 0,
+   TREND_LOW = -1,
+  };
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 HIGH_LEVEL_TREND CheckHighLeveTrend()
   {
+
+//+------------------------------------------------------------------+
+//|          Trend High                                              |
+//+------------------------------------------------------------------+
+
 //+------------------------------------------------------------------+
 //|     牛市直衝                                                       |
 //+------------------------------------------------------------------+
@@ -766,13 +1011,13 @@ HIGH_LEVEL_TREND CheckHighLeveTrend()
 //|    /                                                             |
 //|   + 5                                                            |
 //+------------------------------------------------------------------+
-   if(zzIndexM5 >= 5 &&
-      zzPricesM5[4] > zzPricesM5[3] &&
-      zzPricesM5[2] > zzPricesM5[1] &&
+   if(zzIndexMh >= 5 &&
+      zzPricesMh[4] > zzPricesMh[3] &&
+      zzPricesMh[2] > zzPricesMh[1] &&
 
-      zzPricesM5[1] > zzPricesM5[3] &&
-      zzPricesM5[2] > zzPricesM5[4] &&
-      zzPricesM5[0] > zzPricesM5[2])
+      zzPricesMh[1] > zzPricesMh[3] &&
+      zzPricesMh[2] > zzPricesMh[4] &&
+      zzPricesMh[0] > zzPricesMh[2])
       return TREND_HIGH;
 
 //+------------------------------------------------------------------+
@@ -786,13 +1031,13 @@ HIGH_LEVEL_TREND CheckHighLeveTrend()
 //|      /     + 3                                                   |
 //|     + 5                                                          |
 //+------------------------------------------------------------------+
-   if(zzIndexM1 >= 5 &&
-      zzPricesM5[4] > zzPricesM5[3] &&
-      zzPricesM5[2] > zzPricesM5[1] &&
+   if(zzIndexMh >= 5 &&
+      zzPricesMh[4] > zzPricesMh[3] &&
+      zzPricesMh[2] > zzPricesMh[1] &&
 
-      zzPricesM5[1] > zzPricesM5[3] &&
-      zzPricesM5[0] > zzPricesM5[2] &&
-      zzPricesM5[0] > zzPricesM5[4])
+      zzPricesMh[1] > zzPricesMh[3] &&
+      zzPricesMh[0] > zzPricesMh[2] &&
+      zzPricesMh[0] > zzPricesMh[4])
       return TREND_HIGH;
 
 //+------------------------------------------------------------------+
@@ -806,22 +1051,94 @@ HIGH_LEVEL_TREND CheckHighLeveTrend()
 //|      / \ /   + 2                                                 |
 //|     /   + 4                                                      |
 //+------------------------------------------------------------------+
-   if(zzIndexM1 >= 5 &&
-      zzPricesM5[5] > zzPricesM5[4] &&
-      zzPricesM5[3] > zzPricesM5[2] &&
-      zzPricesM5[1] > zzPricesM5[0] &&
+   if(zzIndexMh >= 5 &&
+      zzPricesMh[5] > zzPricesMh[4] &&
+      zzPricesMh[3] > zzPricesMh[2] &&
+      zzPricesMh[1] > zzPricesMh[0] &&
 
-      zzPricesM5[2] > zzPricesM5[4] &&
+      zzPricesMh[2] > zzPricesMh[4] &&
 
-      zzPricesM5[1] > zzPricesM5[3] &&
-      zzPricesM5[0] > zzPricesM5[3] &&
-
-      zzPricesM5[3] >= zzPricesM5[5])
+      zzPricesMh[1] > zzPricesMh[3] &&
+      zzPricesMh[0] > zzPricesMh[3] &&
+      
+      zzPricesMh[3] >= zzPricesMh[5])
       return TREND_HIGH;
 
-   return TREND_LOW;
+
+//+------------------------------------------------------------------+
+//|          Trend Low                                               |
+//+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//|     熊市直落                                                       |
+//+------------------------------------------------------------------+
+//|   + 5                                                            |
+//|    \                                                             |
+//|     \     + 3                                                    |
+//|      \   / \                                                     |
+//|       \ /   \   + 1                                              |
+//|        + 4   \ / \                                               |
+//|               + 2 \                                              |
+//|                    \                                             |
+//|                     \                                            |
+//|                      + 0                                         |
+//+------------------------------------------------------------------+
+   if(zzIndexMh >= 5 &&
+      zzPricesMh[4] < zzPricesMh[3] &&
+      zzPricesMh[2] < zzPricesMh[1] &&
+
+      zzPricesMh[1] < zzPricesMh[3] &&
+      zzPricesMh[2] < zzPricesMh[4] &&
+      zzPricesMh[0] < zzPricesMh[2])
+      return TREND_LOW;
+
+//+------------------------------------------------------------------+
+//|     下降三角                                                      |
+//+------------------------------------------------------------------+
+//|     + 5                                                          |
+//|      \     + 3                                                   |
+//|       \   / \   + 1                                              |
+//|        \ /   \ / \                                               |
+//|         + 4   + 2 \                                              |
+//|                    \                                             |
+//|                     + 0                                          |
+//+------------------------------------------------------------------+
+   if(zzIndexMh >= 5 &&
+      zzPricesMh[4] < zzPricesMh[3] &&
+      zzPricesMh[2] < zzPricesMh[1] &&
+
+      zzPricesMh[1] < zzPricesMh[3] &&
+      zzPricesMh[0] < zzPricesMh[2] &&
+      zzPricesMh[0] < zzPricesMh[4])
+      return TREND_LOW;
+
+//+------------------------------------------------------------------+
+//|     平穩上降                                                      |
+//+------------------------------------------------------------------+
+//|     \   + 4                                                      |
+//|      \ / \   + 2                                                 |
+//|       + 5 \ / \                                                  |
+//|            + 3 \                                                 |
+//|                 \   + 0                                          |
+//|                  \ /                                             |
+//|                   + 1                                            |
+//+------------------------------------------------------------------+
+   if(zzIndexMh >= 5 &&
+      zzPricesMh[5] < zzPricesMh[4] &&
+      zzPricesMh[3] < zzPricesMh[2] &&
+      zzPricesMh[1] < zzPricesMh[0] &&
+
+      zzPricesMh[2] < zzPricesMh[4] &&
+
+      zzPricesMh[1] < zzPricesMh[3] &&
+      zzPricesMh[0] < zzPricesMh[3] &&
+
+      zzPricesMh[3] <= zzPricesMh[5])
+      return TREND_LOW;
+
+   return TREND_NONE;
   }
-  
+
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
@@ -840,7 +1157,8 @@ int OnInit()
 
 //--- Init ZigZag Lines Data.
    ArraySetAsSeries(m1Rates, true);
-   ArraySetAsSeries(m5Rates, true);
+   ArraySetAsSeries(mhRates, true);
+   ArraySetAsSeries(mlRates, true);
 
    return(INIT_SUCCEEDED);
   }
@@ -865,20 +1183,13 @@ void OnTick()
      {
       dig=digit1-1;
       //---- Candle1 OHLC
-      double O1=NormalizeDouble(iOpen(Symbol(),PERIOD_M1,2),dig);
-      double H1=NormalizeDouble(iHigh(Symbol(),PERIOD_M1,2),dig);
-      double L1=NormalizeDouble(iLow(Symbol(),PERIOD_M1,2),dig);
-      double C1=NormalizeDouble(iClose(Symbol(),PERIOD_M1,2),dig);
-      //---- Candle2 OHLC
-      double O2=NormalizeDouble(iOpen(Symbol(),PERIOD_M1,1),dig);
-      double H2=NormalizeDouble(iHigh(Symbol(),PERIOD_M1,1),dig);
-      double L2=NormalizeDouble(iLow(Symbol(),PERIOD_M1,1),dig);
-      double C2=NormalizeDouble(iClose(Symbol(),PERIOD_M1,1),dig);
-      //---- Candle3 OHLC
-      double O3=NormalizeDouble(iOpen(Symbol(),PERIOD_M1,0),dig);
-      double H3=NormalizeDouble(iHigh(Symbol(),PERIOD_M1,0),dig);
-      double L3=NormalizeDouble(iLow(Symbol(),PERIOD_M1,0),dig);
-      double C3=NormalizeDouble(iClose(Symbol(),PERIOD_M1,0),dig);
+      MqlRates prices[], p, pp, ppp;
+      ArraySetAsSeries(prices, true);
+      CopyRates(_Symbol, PERIOD_M1, 0, 3, prices);
+
+      p = prices[0];
+      pp = prices[1];
+      ppp = prices[2];
 
       bool closeOrder = false;
 
@@ -888,7 +1199,11 @@ void OnTick()
          for(int i = 0; i <= refIndex; i ++)
            {
             ref = Refs[i];
-            if((H3==ref) || (L3==ref) || ((H3>ref) && (L3<ref)) || ((L2<ref) && (H3>=ref)) || ((H2>ref) && (L3<=ref)))
+            if((p.high == ref) ||
+               (p.low == ref) ||
+               ((p.high > ref) && (p.low < ref)) ||
+               ((pp.low < ref) && (p.high >= ref)) |
+               ((pp.high > ref) && (p.high <= ref)))
               {
                refHit = true;
                targetRef = ref;
@@ -896,12 +1211,12 @@ void OnTick()
               }
            }
         }
+      // Close price must greater than order price.
+      if(refHit)
         {
-         // Close price must greater than order price.
-
-         if(refHit)
+         // Hit Support.
+         if(OrderType == BUY_ORDER)
            {
-            // Hit Support.
             if(OrderPrice > targetRef)
               {
                refHit = false;
@@ -911,48 +1226,98 @@ void OnTick()
             else
                closeOrder = true;
            }
-
-         if(C3 > OrderPrice + (sl*10*_Point))
+         if(OrderType == SELL_ORDER)
            {
-
-            //---- Pattern 1 - bearish
-            if(C1 <= O1 && ((H1 - O1) > (O1 - C1)) && (C2 <= O2) && (C2 < L1) && (H2 < H1))
+            if(OrderPrice < targetRef)
               {
-               Print("Shooting start + Big black candle");
+               refHit = false;
+               return ;
+              }
+            // Hit Support.
+            else
                closeOrder = true;
-               refHit = false;
-              }
-            //---- Pattern 2 - bearish
-            /*
-            if(C1>O1 && C2<O2 && ((C1-O1)>(H1-C1)) && ((C1-O1)>(O1-L1)) && ((O2-C2)>(H2-O2)) && ((O2-C2)>(C2-L2)) && O2>=C1 && O2<=H1 && C2<=O1 && C2>=L1)
-              {
-               closeOrder = true;
-               refHit = false;
-              }
-              */
-            //---- Pattern 3 - bearish
-
-            if(C1 < O1 && ((O2 - C2) >= (C2 - L2)) && C2 < O2 && C2 < C1)
-              {
-               closeOrder = true;
-               refHit = false;
-              }
-
-            //---- Bullish Engulfing candle.
-            if(O2 > C2 && C1 > O1 && O2 > C1 && O1 > C2)
-              {
-               closeOrder = true;
-               refHit = false;
-               Print("Bearish Engulfing candle");
-              }
-            //---- Stand above Resistance.
-            if(L1 >= targetRef && L2 >= targetRef && L3 >= targetRef)
-              {
-               refHit = false;
-               //PrintFormat("Overcoming Resistance %.2f", targetRef);
-              }
+           }
+         if(OrderType == NONE_ORDER)
+           {
+            refHit = false;
+            return ;
            }
         }
+
+      // Protect profits for LONG.
+      if(OrderType == BUY_ORDER && p.close > OrderPrice + (tp*10*_Point))
+        {
+
+         //---- Pattern 1 - bearish doji
+         if(IsBearishDoji(pp, ppp))
+           {
+            Print("Bearish Doji");
+            closeOrder = true;
+            refHit = false;
+           }
+
+         //---- Pattern 3 - bearish
+         if(IsBearishHopping(pp, ppp))
+           {
+            Print("Bearish Hopping");
+            closeOrder = true;
+            refHit = false;
+           }
+
+         //---- Bullish Engulfing candle.
+         if(IsBearishEngulfing(pp, ppp))
+           {
+            closeOrder = true;
+            refHit = false;
+            Print("Bearish Engulfing candle");
+           }
+         //---- Stand above Resistance.
+         if(p.low >= targetRef &&
+            pp.low >= targetRef &&
+            ppp.low >= targetRef)
+           {
+            refHit = false;
+            //PrintFormat("Overcoming Resistance %.2f", targetRef);
+           }
+        }
+
+      // Protect profits for SHORT.
+      if(OrderType == SELL_ORDER && p.close < OrderPrice - (tp*10*_Point))
+        {
+
+         //---- Pattern 1 - bearish
+         if(IsBullishDoji(pp, ppp))
+           {
+            Print("Bullish Doji");
+            closeOrder = true;
+            refHit = false;
+           }
+
+         //---- Pattern 3 - bearish
+         if(IsBullishHopping(pp, ppp))
+           {
+            Print("Bullish Hopping");
+            closeOrder = true;
+            refHit = false;
+           }
+
+         //---- Bullish Engulfing candle.
+         if(IsBullishEngulfing(pp, ppp))
+           {
+            closeOrder = true;
+            refHit = false;
+            Print("Bullish Engulfing candle");
+           }
+         //---- Drop below Support.
+         if(p.high <= targetRef &&
+            pp.high <= targetRef &&
+            ppp.high <= targetRef)
+           {
+            refHit = false;
+            //PrintFormat("Overcoming Resistance %.2f", targetRef);
+           }
+        }
+
       //--- Close position while bearish.
       if(closeOrder)
         {
@@ -970,8 +1335,7 @@ void OnTick()
            }
          else
             Print("Failed to close position!!!");
-        }
-
+        }   //--- End of Close position.
      }
   }
 //+------------------------------------------------------------------+
@@ -992,13 +1356,23 @@ void OnTimer()
    zzIndexM1 = CalculateZigZag(m1Rates, zzPricesM1, zzTimesM1);
    UpdateZigZagLines();
 
-   CopyRates(_Symbol, zzHighTimeFrame, 1, SwingTimeSpan / 5, m5Rates);
-   zzIndexM5 = CalculateZigZag(m5Rates, zzPricesM5, zzTimesM5);
+   CopyRates(_Symbol, zzHighTimeFrame, 1, SwingTimeSpan / 4, mhRates);
+   zzIndexMh = CalculateZigZag(mhRates, zzPricesMh, zzTimesMh);
 
-   // is time to place order ?
+   CopyRates(_Symbol, zzLongTimeFrame, 1, SwingTimeSpan / 4, mlRates);
+   zzIndexMl = CalculateZigZag(mlRates, zzPricesMl, zzTimesMl);
+
+// is time to place order ?
    if(!IsOrderOpen)
      {
-      CheckSwingHigh();
+      HIGH_LEVEL_TREND  trend = CheckHighLeveTrend();
+      //if (trend == TREND_HIGH)
+      //   
+      //if (trend == TREND_LOW)
+      if (zzPricesMl[0] > zzPricesMl[1])
+         CheckSwingHigh();
+      else
+         CheckSwingLow();
      }
 
 //--- Handle order.
@@ -1033,6 +1407,10 @@ void OnTrade()
 //---
 
   }
+//+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+
 //+------------------------------------------------------------------+
 
 //+------------------------------------------------------------------+
