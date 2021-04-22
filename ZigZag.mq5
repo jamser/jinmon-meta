@@ -541,7 +541,7 @@ MqlRates mlRates[];
 const int SwingTimeSpan = 240;
 
 ENUM_TIMEFRAMES zzTimeFrame = PERIOD_M1;
-ENUM_TIMEFRAMES zzHighTimeFrame = PERIOD_H1;
+ENUM_TIMEFRAMES zzHighTimeFrame = PERIOD_M15;
 ENUM_TIMEFRAMES zzLongTimeFrame = PERIOD_H1;
 
 //+------------------------------------------------------------------+
@@ -793,7 +793,7 @@ bool SwingLowPADetector(int type)
 
    switch(type)
      {
-      case 1:=
+      case 1:
          if(CheckHighLeveTrend() == TREND_HIGH)
             return false;
 
@@ -863,9 +863,13 @@ bool CheckSwingHigh()
       zzPricesM1[4] > zzPricesM1[3] &&
       zzPricesM1[2] > zzPricesM1[1] &&
 
-      zzPricesM1[1] > zzPricesM1[3] &&
-      zzPricesM1[2] > zzPricesM1[4] &&
       zzPricesM1[0] > zzPricesM1[2] &&
+      zzPricesM1[2] >= zzPricesM1[4] &&
+      
+      zzPricesM1[1] > zzPricesM1[3] &&      
+      zzPricesM1[3] > zzPricesM1[5] &&
+      
+      MathAbs(zzPricesM1[0] - zzPricesM1[5]) >= 0.7 &&
       SwingHighPADetector(2))
      {
       IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[1] - (sl*10*_Point));
@@ -889,13 +893,14 @@ bool CheckSwingHigh()
       zzPricesM1[3] > zzPricesM1[2] &&
       zzPricesM1[1] > zzPricesM1[0] &&
 
-// trend high
+
       zzPricesM1[2] > zzPricesM1[4] &&
+      zzPricesM1[3] >= zzPricesM1[5] &&
 
       zzPricesM1[1] > zzPricesM1[3] &&
       zzPricesM1[0] > zzPricesM1[3] &&
 
-      zzPricesM1[3] >= zzPricesM1[5] &&
+      MathAbs(zzPricesM1[4] - zzPricesM1[1]) >= 0.7 &&
       SwingHighPADetector(1))
      {
       IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[2] - (sl*10*_Point));
@@ -935,9 +940,13 @@ bool CheckSwingLow()
       zzPricesM1[4] < zzPricesM1[3] &&
       zzPricesM1[2] < zzPricesM1[1] &&
 
+      zzPricesM1[0] < zzPricesM1[2] &&      
+      zzPricesM1[2] <= zzPricesM1[4] &&
+
       zzPricesM1[1] < zzPricesM1[3] &&
-      zzPricesM1[2] < zzPricesM1[4] &&
-      zzPricesM1[0] < zzPricesM1[2] &&
+      zzPricesM1[3] < zzPricesM1[5] &&
+
+      MathAbs(zzPricesM1[0] - zzPricesM1[5]) >= 0.7 &&
       SwingLowPADetector(2))
      {
       IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5,zzPricesM1[1] + (sl*10*_Point));
@@ -961,12 +970,12 @@ bool CheckSwingLow()
       zzPricesM1[3] < zzPricesM1[2] &&
       zzPricesM1[1] < zzPricesM1[0] &&
 
-      zzPricesM1[2] < zzPricesM1[4] &&
-
+      zzPricesM1[2] <= zzPricesM1[4] &&
+      zzPricesM1[3] < zzPricesM1[5] &&
+      
       zzPricesM1[1] < zzPricesM1[3] &&
       zzPricesM1[0] < zzPricesM1[3] &&
-
-      zzPricesM1[3] <= zzPricesM1[5] &&
+      MathAbs(zzPricesM1[4] - zzPricesM1[1]) >= 0.7 &&
       SwingLowPADetector(1))
      {
       IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5,zzPricesM1[2] + (sl*10*_Point));
@@ -982,6 +991,7 @@ bool CheckSwingLow()
 //+------------------------------------------------------------------+
 enum HIGH_LEVEL_TREND
   {
+   TREND_CONSOLIDATED = 2,
    TREND_HIGH = 1,
    TREND_NONE = 0,
    TREND_LOW = -1,
@@ -992,6 +1002,11 @@ enum HIGH_LEVEL_TREND
 //+------------------------------------------------------------------+
 HIGH_LEVEL_TREND CheckHighLeveTrend()
   {
+
+//+------------------------------------------------------------------+
+//|          Consolidation                                           |
+//+------------------------------------------------------------------+
+   //if(zzPricesM1)
 
 //+------------------------------------------------------------------+
 //|          Trend High                                              |
