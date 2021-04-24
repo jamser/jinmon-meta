@@ -100,24 +100,28 @@ bool OrderPlaced = false;
 int digit1=Digits();
 int dig;
 
+//--- Define wick size of Pin Bar.
+const float PIN_RATIO = 1.6;
+const float HOPPING_RATIO = -0.1;
+
 //--- Inside Bar.
 bool IsInsideBar(MqlRates& p, MqlRates& pp)
   {
    if((pp.high > p.high) &&
       (pp.low < p.low))
       return true;
-/*   if((p.close > p.open) &&
-      (pp.open > pp.close) &&
-      (pp.open > p.close) &&
-      (p.open > pp.close))
-      return true; 
+   /*   if((p.close > p.open) &&
+         (pp.open > pp.close) &&
+         (pp.open > p.close) &&
+         (p.open > pp.close))
+         return true;
 
-   if((p.open > p.close) &&
-      (pp.close > pp.open) &&
-      (pp.close > p.open) &&
-      (p.close > pp.open))
-      return true;
-      */            
+      if((p.open > p.close) &&
+         (pp.close > pp.open) &&
+         (pp.close > p.open) &&
+         (p.close > pp.open))
+         return true;
+         */
    return false;
   }
 
@@ -147,8 +151,8 @@ bool IsBlackCandle(MqlRates& p)
 bool IsDoji(MqlRates& p)
   {
    if((p.close > p.open) &&
-      (p.high - p.close) > (p.close - p.open) * 2 &&
-      (p.open - p.low) > (p.close - p.open) * 2)
+      (p.high - p.close) > (p.close - p.open) * PIN_RATIO &&
+      (p.open - p.low) > (p.close - p.open) * PIN_RATIO)
       return true;
    else
       return false;
@@ -158,8 +162,8 @@ bool IsDoji(MqlRates& p)
 bool IsNgDoji(MqlRates& p)
   {
    if((p.open > p.close) &&
-      (p.high - p.open) > (p.open - p.close) * 2 &&
-      (p.close - p.low) > (p.open - p.close) * 2)
+      (p.high - p.open) > (p.open - p.close) * PIN_RATIO &&
+      (p.close - p.low) > (p.open - p.close) * PIN_RATIO )
       return true;
    else
       return false;
@@ -169,7 +173,7 @@ bool IsNgDoji(MqlRates& p)
 bool IsShootingStar(MqlRates& p)
   {
    if((p.close > p.open) &&
-      (p.high - p.close) > (p.close - p.open) * 2 &&
+      (p.high - p.close) > (p.close - p.open) * PIN_RATIO &&
       (p.close - p.open) > (p.open - p.low))
       return true;
    else
@@ -180,7 +184,7 @@ bool IsShootingStar(MqlRates& p)
 bool IsNgShootingStar(MqlRates& p)
   {
    if((p.open > p.close) &&
-      (p.high - p.open) > (p.open - p.close) * 2 &&
+      (p.high - p.open) > (p.open - p.close) * PIN_RATIO &&
       (p.open - p.close) > (p.close - p.low))
       return true;
    else
@@ -191,7 +195,7 @@ bool IsNgShootingStar(MqlRates& p)
 bool IsHammer(MqlRates& p)
   {
    if((p.close > p.open) &&
-      (p.open - p.low) > (p.close - p.open) * 2 &&
+      (p.open - p.low) > (p.close - p.open) * PIN_RATIO &&
       (p.close - p.open) > (p.high - p.close))
       return true;
    else
@@ -202,7 +206,7 @@ bool IsHammer(MqlRates& p)
 bool IsNgHammer(MqlRates& p)
   {
    if((p.open > p.close) &&
-      (p.close - p.low) > (p.open - p.close) * 2 &&
+      (p.close - p.low) > (p.open - p.close) * PIN_RATIO &&
       (p.open - p.close) > (p.high - p.open))
       return true;
    else
@@ -212,7 +216,7 @@ bool IsNgHammer(MqlRates& p)
 //--- Reject
 bool IsRejected(MqlRates& p)
   {
-   if (IsNgShootingStar(p) ||
+   if(IsNgShootingStar(p) ||
       IsShootingStar(p) ||
       IsNgHammer(p) ||
       IsHammer(p) ||
@@ -220,7 +224,7 @@ bool IsRejected(MqlRates& p)
       IsDoji(p))
       return true;
    else
-      return false;   
+      return false;
   }
 //--- Bearish Engulfing.
 bool IsBearishEngulfing(MqlRates& p, MqlRates& pp)
@@ -228,8 +232,8 @@ bool IsBearishEngulfing(MqlRates& p, MqlRates& pp)
    if((p.open > p.close) &&
       (pp.close > pp.open) &&
       (p.open >= pp.close) &&
-      (pp.open > p.close) && 
-      // exclude pin bars.
+      (pp.open > p.close) &&
+// exclude pin bars.
       (p.open - p.close) > (p.high - p.open) &&
       (p.open - p.close) > (p.close - p.low) &&
       (pp.close - pp.open) > (pp.high - pp.close) &&
@@ -242,10 +246,7 @@ bool IsBearishEngulfing(MqlRates& p, MqlRates& pp)
 //--- Bearish Doji.
 bool IsBearishDoji(MqlRates& p, MqlRates& pp)
   {
-   if((IsShootingStar((pp)) || IsNgShootingStar(pp)) &&
-      (p.open >= p.close) &&
-      (pp.low > p.close))
-      //(pp.high > p.high))
+   if(IsRejected(pp) && IsBlackCandle(p))
       return true;
    else
       return false;
@@ -256,7 +257,7 @@ bool IsBearishHopping(MqlRates& p, MqlRates& pp)
   {
    if(IsBlackCandle(p) &&
       IsBlackCandle(pp) &&
-      pp.close > p.open)
+      pp.close - p.open > HOPPING_RATIO)
       return true;
    else
       return false;
@@ -270,7 +271,7 @@ bool IsBullishEngulfing(MqlRates& p, MqlRates& pp)
       (pp.open > pp.close) &&
       (p.open <= pp.close) &&
       (p.close > pp.open) &&
-      // exclude pin bar.
+// exclude pin bar.
       (p.close - p.open) > (p.high - p.close) &&
       (p.close - p.open) > (p.open - p.low) &&
       (pp.open - pp.close) > (pp.high - pp.open) &&
@@ -283,11 +284,7 @@ bool IsBullishEngulfing(MqlRates& p, MqlRates& pp)
 //--- Bullish Doji.
 bool IsBullishDoji(MqlRates& p, MqlRates& pp)
   {
-   if((pp.close >= pp.open) &&
-      (pp.open - pp.low) > (pp.close - pp.open) &&
-      (p.close >= p.open) &&
-      (p.open > pp.high) &&
-      (p.low > pp.low))
+   if(IsRejected(pp) && IsWhiteCandle(p))
       return true;
    else
       return false;
@@ -298,7 +295,7 @@ bool IsBullishHopping(MqlRates& p, MqlRates& pp)
   {
    if(IsWhiteCandle(p) &&
       IsWhiteCandle(pp) &&
-      pp.close < p.open)
+      p.open - pp.close >= HOPPING_RATIO )
       return true;
    else
       return false;
@@ -822,8 +819,9 @@ bool SwingHighPADetector(int type, string& message)
 //--- 最新的K線還沒完成，略過，不參考．
    CopyRates(_Symbol, zzTimeFrame, 1, 4, prices);
 
-   if (IsInsideBar(prices[0], prices[1])) return false;
-   
+   if(IsInsideBar(prices[0], prices[1]))
+      return false;
+
    switch(type)
      {
       case 1:
@@ -854,12 +852,15 @@ bool SwingHighPADetector(int type, string& message)
          p2 = prices[1];
          p3 = prices[2];
          p4 = prices[3];
-         
+
          // Traps.
          if(IsBullishHopping(p3, p4) && IsBullishHopping(p2, p3))
             return false;
 
-         if(IsBullishHopping(p3, p4) && !IsBearishHopping(p1, p2))
+         if(IsBullishHopping(p3, p4) &&
+            !IsBearishHopping(p1, p2) &&
+            ( !IsRejected(p2) && !IsRejected(p1) )
+            )
            {
             message = "Hopping";
             return true;
@@ -869,7 +870,7 @@ bool SwingHighPADetector(int type, string& message)
             message = "Engulfing";
             return true;
            }
-         if(IsBullishDoji(p3, p4))
+         if(IsBullishDoji(p3, p4) && !IsBullishHopping(p2, p3))
            {
             message = "Doji";
             return true;
@@ -890,8 +891,9 @@ bool SwingLowPADetector(int type, string& message)
 //--- 最新的K線還沒完成，略過，不參考．
    CopyRates(_Symbol, zzTimeFrame, 1, 4, prices);
 
-   if (IsInsideBar(prices[0], prices[1])) return false;
-   
+   if(IsInsideBar(prices[0], prices[1]))
+      return false;
+
    switch(type)
      {
       case 1:
@@ -927,22 +929,27 @@ bool SwingLowPADetector(int type, string& message)
          p2 = prices[1];
          p3 = prices[2];
          p4 = prices[3];
-         
+
          // Traps.
          if(IsBearishHopping(p3, p4) && IsBearishHopping(p2, p3))
             return false;
-            
-         if(IsBearishHopping(p3, p4) && !IsBullishHopping(p1, p2))
+
+         if(IsBearishHopping(p3, p4) &&
+            !IsBullishHopping(p1, p2) &&
+            ( !IsRejected(p2) && !IsRejected(p1) )
+            )
            {
             message = "Hopping";
             return true;
            }
+           
+          
          if(IsBearishEngulfing(p3, p4) && !IsBullishHopping(p1, p2))
            {
             message = "Engulfing";
             return true;
            }
-         if(IsBearishDoji(p3, p4))
+         if(IsBearishDoji(p3, p4) && !IsBearishHopping(p2, p3))
            {
             message = "Doji";
             return true;
@@ -958,6 +965,7 @@ bool SwingLowPADetector(int type, string& message)
 //+------------------------------------------------------------------+
 bool ReversalPADetector(int type, string& message)
   {
+   int i, pins;
    MqlRates prices[], p1, p2, p3, p4;
    ArraySetAsSeries(prices, true);
 
@@ -969,107 +977,95 @@ bool ReversalPADetector(int type, string& message)
    p3 = prices[2];
    p4 = prices[3];
 
+// Pin bar: Rejected
+   for(pins = 0, i = 0; i < 4; i ++)
+     {
+      if(IsRejected(prices[i]))
+         pins ++;
+     }
+   if(pins >= 2)
+     {
+      message = "Pin Bar";
+      return false;
+     }
+
    switch(type)
      {
       case 1:
-         if (IsShootingStar(p1) || IsShootingStar(p2) || IsNgShootingStar(p1) || IsNgShootingStar(p2))
-           {
-            message = "Pin Bar";
-            return false;
-           }
-
          //--- Pattern: Rejected.
          if(IsBullishHopping(p3, p4) &&
-            (  (IsRejected(p2) && IsBlackCandle(p1)) || (IsBlackCandle(p2) && IsRejected(p1))  )
-            )
+            ((IsRejected(p2) && IsBlackCandle(p1)) || (IsBlackCandle(p2) && IsRejected(p1)))
+           )
            {
             message = "Hopping then Rejected";
-            return true;
+            return false;
            }
          if(IsBullishEngulfing(p3, p4) &&
-            (  (IsRejected(p2) && IsBlackCandle(p1)) || (IsBlackCandle(p2) && IsRejected(p1))  )
-            )
+            ((IsRejected(p2) && IsBlackCandle(p1)) || (IsBlackCandle(p2) && IsRejected(p1)))
+           )
            {
             message = "Bullish Engulfing then Rejected";
             return true;
            }
 
-           //--- End of Rejected.
-           
-            
-         if(IsBearishEngulfing(p3, p4))
+         //--- End of Rejected.
+
+         if(IsBullishDoji(p3, p4) && IsBearishHopping(p1, p2))
            {
-             message = "Engulfing";
+            message = "Doji Hopping";
             return true;
            }
-           
-         if(IsBearishDoji(p3, p4))
-           {
-            message = "Doji";
-            return true;
-           }
-            
+
          // Hopping
-         if(IsBearishHopping(p1, p2) && IsBullishEngulfing(p3, p4))
+         if(IsBullishEngulfing(p3, p4) && IsBearishHopping(p1, p2))
            {
             message = "Engulfing + Bearish Hopping";
             return true;
            }
-         if(IsBearishHopping(p1, p2) && IsBullishHopping(p3, p4))
+         if(IsBullishHopping(p3, p4) && IsBearishHopping(p1, p2))
            {
             message = "Hopping + Bearish Hopping";
             return true;
            }
-            
+
          break;
       case -1:
-         if(IsHammer(p1) || IsHammer(p2) || IsNgHammer(p1) || IsNgHammer(p2))
+         //--- Pattern: Rejected.
+         if(IsBearishHopping(p3, p4) &&
+            ((IsRejected(p2) && IsWhiteCandle(p1)) || (IsWhiteCandle(p2) && IsRejected(p1)))
+           )
            {
-            message = "Pin Bar";
+            message = "Hopping then Rejected";
             return false;
            }
 
-         //--- Pattern: Rejected.
-         if(IsBearishHopping(p3, p4) &&
-            (  (IsRejected(p2) && IsWhiteCandle(p1)) || (IsWhiteCandle(p2) && IsRejected(p1))  )
-            )
-           {
-            message = "Hopping then Rejected";
-            return true;
-           }
-           
          if(IsBearishEngulfing(p3, p4) &&
-            (  (IsRejected(p2) && IsWhiteCandle(p1)) || (IsWhiteCandle(p2) && IsRejected(p1))  )
-            )
+            ((IsRejected(p2) && IsWhiteCandle(p1)) || (IsWhiteCandle(p2) && IsRejected(p1)))
+           )
            {
             message = "Bearish Engulfing then Rejected";
             return true;
            }
-           //--- End of Rejected.
-         
-         if(IsBullishEngulfing(p3, p4))
+         //--- End of Rejected.
+
+         if(IsBearishDoji(p3, p4) && IsBullishHopping(p1, p2))
            {
-            message = "Engulfing";
+            message = "Doji Hopping";
             return true;
            }
-         if(IsBullishDoji(p3, p4))
-           {
-            message = "Doji";
-            return true;
-           }
-            
+
          // Hopping
-         if(IsBullishHopping(p1, p2) && IsBearishEngulfing(p3, p4))
+         if(IsBearishEngulfing(p3, p4) && IsBullishHopping(p1, p2))
            {
             message = "Engulfing + Bullish Hopping";
             return true;
            }
-         if(IsBullishHopping(p1, p2) && IsBearishHopping(p3, p4))
+         if(IsBearishHopping(p3, p4) && IsBullishHopping(p1, p2))
            {
             message = "Hopping + Bullish Hopping";
             return true;
            }
-            
+
          break;
      }
    return false;
@@ -1289,7 +1285,7 @@ HIGH_LEVEL_TREND CheckHighLeveTrend()
       zzPricesMh[0] > zzPricesMh[2] &&
       zzPricesMh[2] >= zzPricesMh[4] &&
       zzPricesMh[4] >= zzPricesMh[6] &&
-      
+
       zzPricesMh[1] > zzPricesMh[3] &&
       zzPricesMh[3] > zzPricesMh[5])
       return TREND_HIGH;
@@ -1345,7 +1341,7 @@ HIGH_LEVEL_TREND CheckHighLeveTrend()
       zzPricesMh[0] < zzPricesMh[2] &&
       zzPricesMh[2] <= zzPricesMh[4] &&
       zzPricesMh[4] <= zzPricesMh[6] &&
-      
+
       zzPricesMh[1] < zzPricesMh[3] &&
       zzPricesMh[3] < zzPricesMh[5])
       return TREND_LOW;
@@ -1401,7 +1397,7 @@ int OnInit()
    ArrayResize(m1Rates, SwingTimeSpan);
    ArrayResize(mhRates, SwingTimeSpan / 4);
    ArrayResize(mlRates, SwingTimeSpan / 4);
-   
+
    return(INIT_SUCCEEDED);
   }
 
@@ -1420,6 +1416,7 @@ void OnDeinit(const int reason)
 void OnTick()
   {
 //---
+   string message;
 
    if(OrderPlaced && (Time(0) - OrderTime) > MinHoldTime)
      {
@@ -1491,6 +1488,7 @@ void OnTick()
         {
 
          //---- Pattern 1 - bearish doji
+         /*
          if(IsBearishDoji(pp, ppp))
            {
             Print("Bearish Doji");
@@ -1513,6 +1511,14 @@ void OnTick()
             refHit = false;
             Print("Bearish Engulfing candle");
            }
+           */
+         if(ReversalPADetector(1, message))
+           {
+            closeOrder = true;
+            refHit = false;
+            Print("Bullish -> Bearish - ", message);
+           }
+           
          //---- Stand above Resistance.
          if(p.low >= targetRef &&
             pp.low >= targetRef &&
@@ -1528,6 +1534,7 @@ void OnTick()
         {
 
          //---- Pattern 1 - bearish
+         /*
          if(IsBullishDoji(pp, ppp))
            {
             Print("Bullish Doji");
@@ -1550,6 +1557,14 @@ void OnTick()
             refHit = false;
             Print("Bullish Engulfing candle");
            }
+           */
+         if(ReversalPADetector(-1, message))
+           {
+            closeOrder = true;
+            refHit = false;
+            Print("Bearish -> Bullish - ", message);
+           }
+
          //---- Drop below Support.
          if(p.high <= targetRef &&
             pp.high <= targetRef &&
