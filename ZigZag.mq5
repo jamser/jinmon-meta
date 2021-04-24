@@ -121,6 +121,50 @@ bool IsInsideBar(MqlRates& p, MqlRates& pp)
    return false;
   }
 
+//--- White Candle.
+bool IsWhiteCandle(MqlRates& p)
+  {
+   if((p.close > p.open) &&
+      (p.close - p.open) > (p.high - p.close) &&
+      (p.close - p.open) > (p.open - p.low))
+      return true;
+   else
+      return false;
+  }
+
+//--- Black Candle.
+bool IsBlackCandle(MqlRates& p)
+  {
+   if((p.open > p.close) &&
+      (p.open - p.close) > (p.high - p.open) &&
+      (p.open - p.close) > (p.close - p.low))
+      return true;
+   else
+      return false;
+  }
+
+//--- Doji
+bool IsDoji(MqlRates& p)
+  {
+   if((p.close > p.open) &&
+      (p.high - p.close) > (p.close - p.open) * 2 &&
+      (p.open - p.low) > (p.close - p.open) * 2)
+      return true;
+   else
+      return false;
+  }
+
+//--- Ng Doji
+bool IsNgDoji(MqlRates& p)
+  {
+   if((p.open > p.close) &&
+      (p.high - p.open) > (p.open - p.close) * 2 &&
+      (p.close - p.low) > (p.open - p.close) * 2)
+      return true;
+   else
+      return false;
+  }
+
 //--- Shooting Star.
 bool IsShootingStar(MqlRates& p)
   {
@@ -165,6 +209,19 @@ bool IsNgHammer(MqlRates& p)
       return false;
   }
 
+//--- Reject
+bool IsRejected(MqlRates& p)
+  {
+   if (IsNgShootingStar(p) ||
+      IsShootingStar(p) ||
+      IsNgHammer(p) ||
+      IsHammer(p) ||
+      IsNgDoji(p) ||
+      IsDoji(p))
+      return true;
+   else
+      return false;   
+  }
 //--- Bearish Engulfing.
 bool IsBearishEngulfing(MqlRates& p, MqlRates& pp)
   {
@@ -197,11 +254,9 @@ bool IsBearishDoji(MqlRates& p, MqlRates& pp)
 //--- Bearish Hopping.
 bool IsBearishHopping(MqlRates& p, MqlRates& pp)
   {
-   if((pp.close < pp.open) &&
-      (p.close < p.open) &&
-      (p.open <= pp.close) &&
-      !IsNgHammer(p) &&
-      !IsNgHammer(pp))
+   if(IsBlackCandle(p) &&
+      IsBlackCandle(pp) &&
+      pp.close > p.open)
       return true;
    else
       return false;
@@ -241,11 +296,9 @@ bool IsBullishDoji(MqlRates& p, MqlRates& pp)
 //--- Bullish Hopping.
 bool IsBullishHopping(MqlRates& p, MqlRates& pp)
   {
-   if((pp.close > pp.open) &&
-      (p.close > p.open) &&
-      (p.open >= pp.close) &&
-      !IsShootingStar(p) &&
-      !IsShootingStar(pp))
+   if(IsWhiteCandle(p) &&
+      IsWhiteCandle(pp) &&
+      pp.close < p.open)
       return true;
    else
       return false;
@@ -761,7 +814,7 @@ void UpdateZigZagLines()
 //+------------------------------------------------------------------+
 //| Swigh-High Price Action Detector                                 |
 //+------------------------------------------------------------------+
-bool SwingHighPADetector(int type)
+bool SwingHighPADetector(int type, string& message)
   {
    MqlRates prices[], p1, p2, p3, p4;
    ArraySetAsSeries(prices, true);
@@ -807,11 +860,20 @@ bool SwingHighPADetector(int type)
             return false;
 
          if(IsBullishHopping(p3, p4) && !IsBearishHopping(p1, p2))
+           {
+            message = "Hopping";
             return true;
+           }
          if(IsBullishEngulfing(p3, p4) && !IsBearishHopping(p1, p2) && !IsBearishDoji(p1, p2))
+           {
+            message = "Engulfing";
             return true;
+           }
          if(IsBullishDoji(p3, p4))
+           {
+            message = "Doji";
             return true;
+           }
          //  }
          break;
      }
@@ -820,7 +882,7 @@ bool SwingHighPADetector(int type)
 //+------------------------------------------------------------------+
 //| Swigh-Low Price Action Detector                                 |
 //+------------------------------------------------------------------+
-bool SwingLowPADetector(int type)
+bool SwingLowPADetector(int type, string& message)
   {
    MqlRates prices[], p1, p2, p3, p4;
    ArraySetAsSeries(prices, true);
@@ -871,11 +933,20 @@ bool SwingLowPADetector(int type)
             return false;
             
          if(IsBearishHopping(p3, p4) && !IsBullishHopping(p1, p2))
+           {
+            message = "Hopping";
             return true;
+           }
          if(IsBearishEngulfing(p3, p4) && !IsBullishHopping(p1, p2))
+           {
+            message = "Engulfing";
             return true;
+           }
          if(IsBearishDoji(p3, p4))
+           {
+            message = "Doji";
             return true;
+           }
          //  }
          break;
      }
@@ -885,7 +956,7 @@ bool SwingLowPADetector(int type)
 //+------------------------------------------------------------------+
 //| Reversal Price Action Detector                                 |
 //+------------------------------------------------------------------+
-bool ReversalPADetector(int type)
+bool ReversalPADetector(int type, string& message)
   {
    MqlRates prices[], p1, p2, p3, p4;
    ArraySetAsSeries(prices, true);
@@ -901,29 +972,103 @@ bool ReversalPADetector(int type)
    switch(type)
      {
       case 1:
+         if (IsShootingStar(p1) || IsShootingStar(p2) || IsNgShootingStar(p1) || IsNgShootingStar(p2))
+           {
+            message = "Pin Bar";
+            return false;
+           }
+
+         //--- Pattern: Rejected.
+         if(IsBullishHopping(p3, p4) &&
+            (  (IsRejected(p2) && IsBlackCandle(p1)) || (IsBlackCandle(p2) && IsRejected(p1))  )
+            )
+           {
+            message = "Hopping then Rejected";
+            return true;
+           }
+         if(IsBullishEngulfing(p3, p4) &&
+            (  (IsRejected(p2) && IsBlackCandle(p1)) || (IsBlackCandle(p2) && IsRejected(p1))  )
+            )
+           {
+            message = "Bullish Engulfing then Rejected";
+            return true;
+           }
+
+           //--- End of Rejected.
+           
+            
          if(IsBearishEngulfing(p3, p4))
+           {
+             message = "Engulfing";
             return true;
+           }
+           
          if(IsBearishDoji(p3, p4))
+           {
+            message = "Doji";
             return true;
+           }
             
          // Hopping
          if(IsBearishHopping(p1, p2) && IsBullishEngulfing(p3, p4))
+           {
+            message = "Engulfing + Bearish Hopping";
             return true;
+           }
          if(IsBearishHopping(p1, p2) && IsBullishHopping(p3, p4))
+           {
+            message = "Hopping + Bearish Hopping";
             return true;
+           }
             
          break;
       case -1:
+         if(IsHammer(p1) || IsHammer(p2) || IsNgHammer(p1) || IsNgHammer(p2))
+           {
+            message = "Pin Bar";
+            return false;
+           }
+
+         //--- Pattern: Rejected.
+         if(IsBearishHopping(p3, p4) &&
+            (  (IsRejected(p2) && IsWhiteCandle(p1)) || (IsWhiteCandle(p2) && IsRejected(p1))  )
+            )
+           {
+            message = "Hopping then Rejected";
+            return true;
+           }
+           
+         if(IsBearishEngulfing(p3, p4) &&
+            (  (IsRejected(p2) && IsWhiteCandle(p1)) || (IsWhiteCandle(p2) && IsRejected(p1))  )
+            )
+           {
+            message = "Bearish Engulfing then Rejected";
+            return true;
+           }
+           //--- End of Rejected.
+         
          if(IsBullishEngulfing(p3, p4))
+           {
+            message = "Engulfing";
             return true;
+           }
          if(IsBullishDoji(p3, p4))
+           {
+            message = "Doji";
             return true;
+           }
             
          // Hopping
          if(IsBullishHopping(p1, p2) && IsBearishEngulfing(p3, p4))
+           {
+            message = "Engulfing + Bullish Hopping";
             return true;
+           }
          if(IsBullishHopping(p1, p2) && IsBearishHopping(p3, p4))
+           {
+            message = "Hopping + Bullish Hopping";
             return true;
+           }
             
          break;
      }
@@ -938,6 +1083,7 @@ bool CheckSwingHigh()
    if(IsOrderOpen)
       return false;
 
+   string message;
    double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
 
@@ -969,11 +1115,11 @@ bool CheckSwingHigh()
 
       MathAbs(zzPricesM1[0] - zzPricesM1[5]) >= 0.7)
      {
-      if(ReversalPADetector(1))
-         IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5,zzPricesM1[0] + (sl*10*_Point), "Bullish -> Bearish");
+      if(ReversalPADetector(1, message))
+         IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5,zzPricesM1[0] + (sl*10*_Point), "Bullish -> Bearish - " + message);
       else
-         if(SwingHighPADetector(2))
-            IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[1] - (sl*10*_Point), "Bullish In");
+         if(SwingHighPADetector(2, message))
+            IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[1] - (sl*10*_Point), "Bullish In - " + message);
 
       if(IsOrderOpen)
          return true;
@@ -1003,7 +1149,7 @@ bool CheckSwingHigh()
       zzPricesM1[0] > zzPricesM1[3] &&
 
       MathAbs(zzPricesM1[4] - zzPricesM1[1]) >= 0.7 &&
-      SwingHighPADetector(1))
+      SwingHighPADetector(1, message))
      {
       //IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[2] - (sl*10*_Point));
       if(IsOrderOpen)
@@ -1021,6 +1167,7 @@ bool CheckSwingLow()
    if(IsOrderOpen)
       return false;
 
+   string message;
    double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
 
@@ -1052,11 +1199,11 @@ bool CheckSwingLow()
 
       MathAbs(zzPricesM1[0] - zzPricesM1[5]) >= 0.7)
      {
-      if(ReversalPADetector(-1))
-         IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[0] - (sl*10*_Point), "Bearish -> Bullish");
+      if(ReversalPADetector(-1, message))
+         IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[0] - (sl*10*_Point), "Bearish -> Bullish - " + message);
       else
-         if(SwingLowPADetector(2))
-            IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5,zzPricesM1[1] + (sl*10*_Point), "Bearish In");
+         if(SwingLowPADetector(2, message))
+            IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5,zzPricesM1[1] + (sl*10*_Point), "Bearish In - " + message);
 
       if(IsOrderOpen)
          return true;
@@ -1084,7 +1231,7 @@ bool CheckSwingLow()
       zzPricesM1[1] < zzPricesM1[3] &&
       zzPricesM1[0] < zzPricesM1[3] &&
       MathAbs(zzPricesM1[4] - zzPricesM1[1]) >= 0.7 &&
-      SwingLowPADetector(1))
+      SwingLowPADetector(1, message))
      {
       //IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5,zzPricesM1[2] + (sl*10*_Point));
       if(IsOrderOpen)
