@@ -89,7 +89,7 @@ bool CloseOrder(double volume)
 //+------------------------------------------------------------------+
 //--- input parameters
 input double   lots=0.1;
-double   tp=14;
+double   tp=21;
 double   sl=14;
 
 bool IsOrderOpen = false;
@@ -171,7 +171,12 @@ bool IsBearishEngulfing(MqlRates& p, MqlRates& pp)
    if((p.open > p.close) &&
       (pp.close > pp.open) &&
       (p.open >= pp.close) &&
-      (pp.open > p.close))
+      (pp.open > p.close) && 
+      // exclude pin bars.
+      (p.open - p.close) > (p.high - p.open) &&
+      (p.open - p.close) > (p.close - p.low) &&
+      (pp.close - pp.open) > (pp.high - pp.close) &&
+      (pp.close - pp.open) > (pp.open - pp.low))
       return true;
    else
       return false;
@@ -180,11 +185,10 @@ bool IsBearishEngulfing(MqlRates& p, MqlRates& pp)
 //--- Bearish Doji.
 bool IsBearishDoji(MqlRates& p, MqlRates& pp)
   {
-   if((pp.open >= pp.close) &&
-      (pp.high - pp.open) > (pp.open - pp.close) &&
+   if((IsShootingStar((pp)) || IsNgShootingStar(pp)) &&
       (p.open >= p.close) &&
-      (pp.low > p.close) &&
-      (pp.high > p.high))
+      (pp.low > p.close))
+      //(pp.high > p.high))
       return true;
    else
       return false;
@@ -194,10 +198,10 @@ bool IsBearishDoji(MqlRates& p, MqlRates& pp)
 bool IsBearishHopping(MqlRates& p, MqlRates& pp)
   {
    if((pp.close < pp.open) &&
-      // 第二支不需要是完整的 black candle, 可以是 pin bar.
-      //(p.open - p.close) >= (p.close - p.low) && 
       (p.close < p.open) &&
-      (p.open <= pp.close))
+      (p.open <= pp.close) &&
+      !IsNgHammer(p) &&
+      !IsNgHammer(pp))
       return true;
    else
       return false;
@@ -210,7 +214,12 @@ bool IsBullishEngulfing(MqlRates& p, MqlRates& pp)
    if((p.close > p.open) &&
       (pp.open > pp.close) &&
       (p.open <= pp.close) &&
-      (p.close > pp.open))
+      (p.close > pp.open) &&
+      // exclude pin bar.
+      (p.close - p.open) > (p.high - p.close) &&
+      (p.close - p.open) > (p.open - p.low) &&
+      (pp.open - pp.close) > (pp.high - pp.open) &&
+      (pp.open - pp.close) > (pp.close - pp.low))
       return true;
    else
       return false;
@@ -234,8 +243,9 @@ bool IsBullishHopping(MqlRates& p, MqlRates& pp)
   {
    if((pp.close > pp.open) &&
       (p.close > p.open) &&
-      //(p.close - p.open) >= (p.high - p.close) &&
-      (p.open >= pp.close))
+      (p.open >= pp.close) &&
+      !IsShootingStar(p) &&
+      !IsShootingStar(pp))
       return true;
    else
       return false;
@@ -768,25 +778,22 @@ bool SwingHighPADetector(int type)
             return false;
 
          //--- 平穩上升：下方要有支撐。
-         for(int i = 0; i < 3; i ++)
+         p1 = prices[0];
+         //--- upside down hammer.
+         if(IsNgShootingStar(p1))
            {
-            p1 = prices[i];
-            //--- upside down hammer.
-            if(IsNgShootingStar(p1))
-              {
-               // 如果之前是 Bearish Engulfing 那就不行！
-               p2 = prices[i + 1];
-               p3 = prices[i + 2];
-               if(!IsBearishEngulfing(p2, p3))
-                  return true;
-               else
-                  return false;
-              }
-
-            //--- hammer.
-            if(IsHammer(p1))
+            // 如果之前是 Bearish Engulfing 那就不行！
+            p2 = prices[1];
+            p3 = prices[2];
+            if(!IsBearishEngulfing(p2, p3))
                return true;
+            else
+               return false;
            }
+         //--- hammer.
+         if(IsHammer(p1))
+            return true;
+
          break;
       case 2:
          //--- 牛直衝
@@ -794,9 +801,14 @@ bool SwingHighPADetector(int type)
          p2 = prices[1];
          p3 = prices[2];
          p4 = prices[3];
+         
+         // Traps.
+         if(IsBullishHopping(p3, p4) && IsBullishHopping(p2, p3))
+            return false;
+
          if(IsBullishHopping(p3, p4) && !IsBearishHopping(p1, p2))
             return true;
-         if(IsBullishEngulfing(p3, p4) && !IsBearishHopping(p1, p2))
+         if(IsBullishEngulfing(p3, p4) && !IsBearishHopping(p1, p2) && !IsBearishDoji(p1, p2))
             return true;
          if(IsBullishDoji(p3, p4))
             return true;
@@ -825,25 +837,22 @@ bool SwingLowPADetector(int type)
             return false;
 
          //--- 平穩下降升：上方要有阻力。
-         for(int i = 0; i < 3; i ++)
+         p1 = prices[0];
+         //--- upside down hammer.
+         if(IsHammer(p1))
            {
-            p1 = prices[i];
-            //--- upside down hammer.
-            if(IsHammer(p1))
-              {
-               // 如果之前是 Bullish Engulfing 那就不行！
-               p2 = prices[i + 1];
-               p3 = prices[i + 2];
-               if(!IsBullishEngulfing(p2, p3))
-                  return true;
-               else
-                  return false;
-              }
-
-            //--- negative shooting star.
-            if(IsNgShootingStar(p1))
+            // 如果之前是 Bullish Engulfing 那就不行！
+            p2 = prices[1];
+            p3 = prices[2];
+            if(!IsBullishEngulfing(p2, p3))
                return true;
+            else
+               return false;
            }
+         //--- negative shooting star.
+         if(IsNgShootingStar(p1))
+            return true;
+
          break;
       case 2:
          //--- 熊直落
@@ -856,6 +865,11 @@ bool SwingLowPADetector(int type)
          p2 = prices[1];
          p3 = prices[2];
          p4 = prices[3];
+         
+         // Traps.
+         if(IsBearishHopping(p3, p4) && IsBearishHopping(p2, p3))
+            return false;
+            
          if(IsBearishHopping(p3, p4) && !IsBullishHopping(p1, p2))
             return true;
          if(IsBearishEngulfing(p3, p4) && !IsBullishHopping(p1, p2))
@@ -1237,6 +1251,10 @@ int OnInit()
    ArraySetAsSeries(mhRates, true);
    ArraySetAsSeries(mlRates, true);
 
+   ArrayResize(m1Rates, SwingTimeSpan);
+   ArrayResize(mhRates, SwingTimeSpan / 4);
+   ArrayResize(mlRates, SwingTimeSpan / 4);
+   
    return(INIT_SUCCEEDED);
   }
 
