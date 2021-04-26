@@ -9,7 +9,6 @@
 
 #include <Trade\PositionInfo.mqh>
 #include <Trade\Trade.mqh>
-#include <Math\Stat\Normal.mqh>
 
 //input ENUM_TIMEFRAMES TimeFrame = PERIOD_M5;
 
@@ -88,51 +87,10 @@ bool CloseOrder(double volume)
 //+------------------------------------------------------------------+
 //| Order Management                                                 |
 //+------------------------------------------------------------------+
-int countBearish = 0;
-int countBullish = 0;
-int countBearishReversal = 0;
-int countBullishReversal = 0;
-int countCandidate = 0;
-
 //--- input parameters
 input double   lots=0.1;
-double   tp=21 * 10 * _Point;
-double   sl=14 * 10 * _Point;
-
-double ORDER_MARGIN; // = tp*10*_Point * 1;
-
-//--- Margin Protector
-double _marginHigh[4];
-double _marginLow[4];
-
-bool IsMarginSafe(double price, int dir, double margin)
-  {
-   double high = 0, low = 0;
-   //CopyHigh(_Symbol, PERIOD_M30, 0, 4, _marginHigh);
-   //CopyLow(_Symbol, PERIOD_M30, 0, 4, _marginLow);
-   
-   //high = MathMean(_marginHigh);
-   //low = MathMean(_marginLow);
-   high = iHigh(_Symbol, PERIOD_H2, 1);
-   low = iLow(_Symbol, PERIOD_H2, 1);
-   
-   if(dir == 1 &&
-      high >= price + margin)
-     {
-      ORDER_MARGIN = margin;
-      return true;
-     }
-      
-   if(dir == -1 &&
-      price - margin >= low)
-     {
-      ORDER_MARGIN = margin;
-      return true;
-     }
-
-   return false;
-  }
-
+double   tp=21;
+double   sl=14;
 
 bool IsOrderOpen = false;
 bool OrderPlaced = false;
@@ -346,7 +304,149 @@ bool IsBullishHopping(MqlRates& p, MqlRates& pp)
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
+int PriceAction()
+  {
+   dig=digit1-1;
+//---- Candle1 OHLC
+   double O1=NormalizeDouble(iOpen(Symbol(),PERIOD_M1,2),dig);
+   double H1=NormalizeDouble(iHigh(Symbol(),PERIOD_M1,2),dig);
+   double L1=NormalizeDouble(iLow(Symbol(),PERIOD_M1,2),dig);
+   double C1=NormalizeDouble(iClose(Symbol(),PERIOD_M1,2),dig);
+//---- Candle2 OHLC
+   double O2=NormalizeDouble(iOpen(Symbol(),PERIOD_M1,1),dig);
+   double H2=NormalizeDouble(iHigh(Symbol(),PERIOD_M1,1),dig);
+   double L2=NormalizeDouble(iLow(Symbol(),PERIOD_M1,1),dig);
+   double C2=NormalizeDouble(iClose(Symbol(),PERIOD_M1,1),dig);
+//---- Candle3 OHLC
+   double O3=NormalizeDouble(iOpen(Symbol(),PERIOD_M1,0),dig);
+   double H3=NormalizeDouble(iHigh(Symbol(),PERIOD_M1,0),dig);
+   double L3=NormalizeDouble(iLow(Symbol(),PERIOD_M1,0),dig);
+   double C3=NormalizeDouble(iClose(Symbol(),PERIOD_M1,0),dig);
+
+   int type = 0;
+
+//--- Pattern 1 - bullish
+   if(C1>=O1 && L1<O1 && ((O1-L1)>(C1-O1)) && C2>=O2 && C2>H1 && L2>L1)
+     {
+      return 1;
+     }
+//--- Pattern 2 - bullish
+   else
+      if(C1<O1 && C2>O2 && ((O1-C1)>(H1-O1)) && ((O1-C1)>(C1-L1)) && ((C2-O2)>(H2-C2)) && ((C2-O2)>(O2-L2)) && O2<=C1 && O2>=L1 && C2>=O1 && C2<=H1)
+        {
+         return 1;
+        }
+      //--- Pattern 3 - bullish
+      else
+         if(C1>O1 && ((C2-O2)>=(H2-C2)) && C2>O2 && C2>C1)
+           {
+            return 1;
+           }
+
+//---- Pattern 1 - bearish
+   if(C1 <= O1 && ((H1 - O1) > (O1 - C1)) && (C2 <= O2) && (C2 < L1) && (H2 < H1))
+     {
+      //Print("Shooting start + Big black candle");
+      return -1;
+     }
+//---- Pattern 2 - bearish
+   /*
+   if(C1>O1 && C2<O2 && ((C1-O1)>(H1-C1)) && ((C1-O1)>(O1-L1)) && ((O2-C2)>(H2-O2)) && ((O2-C2)>(C2-L2)) && O2>=C1 && O2<=H1 && C2<=O1 && C2>=L1)
+     {
+      closeOrder = true;
+      refHit = false;
+     }
+     */
+//---- Pattern 3 - bearish
+   else
+      if(C1 < O1 && ((O2 - C2) >= (C2 - L2)) && C2 < O2 && C2 < C1)
+        {
+         return -1;
+        }
+
+      //---- Bullish Engulfing candle.
+      else
+         if(O2 > C2 && C1 > O1 && O2 > C1 && O1 > C2)
+           {
+            return -1;
+           }
+
+   return 0;
+  }
+
 const ENUM_TIMEFRAMES HighLevelTimeFrame = PERIOD_H1;
+int PriceActionHL()
+  {
+   dig=digit1-1;
+//---- Candle1 OHLC
+   double O1=NormalizeDouble(iOpen(Symbol(),HighLevelTimeFrame,2),dig);
+   double H1=NormalizeDouble(iHigh(Symbol(),HighLevelTimeFrame,2),dig);
+   double L1=NormalizeDouble(iLow(Symbol(),HighLevelTimeFrame,2),dig);
+   double C1=NormalizeDouble(iClose(Symbol(),HighLevelTimeFrame,2),dig);
+//---- Candle2 OHLC
+   double O2=NormalizeDouble(iOpen(Symbol(),HighLevelTimeFrame,1),dig);
+   double H2=NormalizeDouble(iHigh(Symbol(),HighLevelTimeFrame,1),dig);
+   double L2=NormalizeDouble(iLow(Symbol(),HighLevelTimeFrame,1),dig);
+   double C2=NormalizeDouble(iClose(Symbol(),HighLevelTimeFrame,1),dig);
+//---- Candle3 OHLC
+   double O3=NormalizeDouble(iOpen(Symbol(),HighLevelTimeFrame,0),dig);
+   double H3=NormalizeDouble(iHigh(Symbol(),HighLevelTimeFrame,0),dig);
+   double L3=NormalizeDouble(iLow(Symbol(),HighLevelTimeFrame,0),dig);
+   double C3=NormalizeDouble(iClose(Symbol(),HighLevelTimeFrame,0),dig);
+
+   int type = 0;
+
+//--- Pattern 1 - bullish
+   if(C1>=O1 && L1<O1 && ((O1-L1)>(C1-O1)) && C2>=O2 && C2>H1 && L2>L1)
+     {
+      return 1;
+     }
+//--- Pattern 2 - bullish
+   else
+      if(C1<O1 && C2>O2 && ((O1-C1)>(H1-O1)) && ((O1-C1)>(C1-L1)) && ((C2-O2)>(H2-C2)) && ((C2-O2)>(O2-L2)) && O2<=C1 && O2>=L1 && C2>=O1 && C2<=H1)
+        {
+         return 1;
+        }
+      //--- Pattern 3 - bullish
+      else
+         if(C1>O1 && ((C2-O2)>=(H2-C2)) && C2>O2 && C2>C1)
+           {
+            return 1;
+           }
+
+//---- Pattern 1 - bearish
+   if(C1 <= O1 && ((H1 - O1) > (O1 - C1)) && (C2 <= O2) && (C2 < L1) && (H2 < H1))
+     {
+      //Print("Shooting start + Big black candle");
+      return -1;
+     }
+//---- Pattern 2 - bearish
+   if(C1>O1 && C2<O2 && ((C1-O1)>(H1-C1)) && ((C1-O1)>(O1-L1)) && ((O2-C2)>(H2-O2)) && ((O2-C2)>(C2-L2)) && O2>=C1 && O2<=H1 && C2<=O1 && C2>=L1)
+     {
+      return -1;
+     }
+//---- Pattern 3 - bearish
+   else
+      if(C1 < O1 && ((O2 - C2) >= (C2 - L2)) && C2 < O2 && C2 < C1)
+        {
+         return -1;
+        }
+
+      //---- Bullish Engulfing candle.
+      else
+         if(O2 > C2 && C1 > O1 && O2 > C1 && O1 > C2)
+           {
+            return -1;
+           }
+         else
+            if(O2 > C2 && C2 > O3 && C2 > C3)
+               return -1;
+
+   return 0;
+  }
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 
 //+------------------------------------------------------------------+
 //| Support and Resistance                                           |
@@ -359,7 +459,7 @@ double targetRef;
 //---
 int MaxLimit = 72;
 input int MaxCrossesLevel = 9;
-double MaxR = 1;
+double MaxR = 0.1;
 ENUM_TIMEFRAMES TimeFrame = PERIOD_M15;
 //---
 int CrossBarsNum[];
@@ -391,46 +491,51 @@ double prHigh(int i)
 int FindLevel()
   {
 //int    counted_bars=IndicatorCounted();
-   int Bars = Bars(_Symbol, TimeFrame);
+   int Bars = Bars(_Symbol, PERIOD_M1);
    int    limit = MathMin(Bars,MaxLimit);
    double d1 = prLow(iLowest(NULL,TimeFrame,MODE_LOW,limit,0));
    double d2 = prHigh(iHighest(NULL,TimeFrame,MODE_HIGH,limit,0));
 
    if(d1Num!=d1||d2Num!=d2)
      {
-      ArrayResize(CrossBarsNum, (d2-d1)*10 + 1);
-      ArrayResize(CrossBarsMin, (d2-d1)*10 + 1);
+      ArrayResize(CrossBarsNum, (d2-d1)*100 + 1);
+      ArrayResize(CrossBarsMin, (d2-d1)*100 + 1);
       if(d1Num != 0.0 && d1Num != d1)
         {
-         ArrayCopy(CrossBarsNum,CrossBarsNum, 0, (d1Num-d1)*10 + 1);
-         ArrayCopy(CrossBarsMin,CrossBarsMin, 0, (d1Num-d1)*10 + 1);
+         ArrayCopy(CrossBarsNum,CrossBarsNum, 0, (d1Num-d1)*100 + 1);
+         ArrayCopy(CrossBarsMin,CrossBarsMin, 0, (d1Num-d1)*100 + 1);
         }
       d1Num=d1;
       d2Num=d2;
      }
 
    int di;
-   for(double d=d1; d<=d2; d+=0.1)
+   for(double d=d1; d<=d2; d+=0.01)
      {
-      di = (d-d1)*10;
+      di = (d-d1)*100;
       CrossBarsNum[di] = 0;
       CrossBarsMin[di] = false;
      }
 
-   for(double d=d1; d<=d2; d+=0.1)
+   for(double d=d1; d<=d2; d+=0.01)
      {
-      int di = (d-d1)*10;
+      int di = (d-d1)*100;
       for(int i=1; i<limit; i++)
          if(d>prLow(i)&&d<prHigh(i))
             CrossBarsNum[di]++;
      }
 
-   double l=MaxR*10;
+   double l=MaxR*100;
    int index = -1;
-   for(double d = d1 + MaxR; d <= d2 - MaxR; d += 0.1)
+   for(double d = d1 + MaxR; d <= d2 - MaxR; d += 0.01)
      {
-      int di = (d-d1)*10;
-
+      int di = (d-d1)*100;
+      /*
+            if(!CrossBarsMin[di] && CrossBarsNum[ArrayMaximum(CrossBarsNum, 2*l, di - l)] -
+               CrossBarsNum[ArrayMinimum(CrossBarsNum, 2*l, di - l)] > MaxCrossesLevel &&
+               CrossBarsNum[di] == CrossBarsNum[ArrayMinimum(CrossBarsNum, 2*l, di - l)] &&
+               CrossBarsNum[di-1] != CrossBarsNum[ArrayMinimum(CrossBarsNum, 2*l, di - l)])
+               */
       if(!CrossBarsMin[di]&& //CrossBarsNum[di]<MaxCrossesLevel&&
          CrossBarsNum[ArrayMaximum(CrossBarsNum,2*l,di-l)]-CrossBarsNum[ArrayMinimum(CrossBarsNum,2*l,di-l)]>MaxCrossesLevel
          &&CrossBarsNum[di]  ==CrossBarsNum[ArrayMinimum(CrossBarsNum,2*l,di-l)]
@@ -720,7 +825,7 @@ bool SwingHighPADetector(int type, string& message)
    switch(type)
      {
       case 1:
-         if(CheckHighLevelTrend() == TREND_LOW)
+         if(CheckHighLeveTrend() == TREND_LOW)
             return false;
 
          //--- 平穩上升：下方要有支撐。
@@ -792,7 +897,7 @@ bool SwingLowPADetector(int type, string& message)
    switch(type)
      {
       case 1:
-         if(CheckHighLevelTrend() == TREND_HIGH)
+         if(CheckHighLeveTrend() == TREND_HIGH)
             return false;
 
          //--- 平穩下降升：上方要有阻力。
@@ -815,7 +920,7 @@ bool SwingLowPADetector(int type, string& message)
          break;
       case 2:
          //--- 熊直落
-         //if(CheckHighLevelTrend() == TREND_HIGH)
+         //if(CheckHighLeveTrend() == TREND_HIGH)
          //   return false;
 
          //for(int i = 0; i < 2; i ++)
@@ -977,8 +1082,7 @@ bool CheckSwingHigh()
    string message;
    double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-   double StopLoss;
-   
+
 //+------------------------------------------------------------------+
 //|     牛市直衝                                                       |
 //+------------------------------------------------------------------+
@@ -993,49 +1097,25 @@ bool CheckSwingHigh()
 //|       \ /                                                        |
 //|        + 5                                                       |
 //+------------------------------------------------------------------+
-   if(zzIndexM1 >= 4 &&
-      //zzPricesM1[6] > zzPricesM1[5] &&
+   if(zzIndexM1 >= 6 &&
+      zzPricesM1[6] > zzPricesM1[5] &&
       zzPricesM1[4] > zzPricesM1[3] &&
       zzPricesM1[2] > zzPricesM1[1] &&
 
       zzPricesM1[0] > zzPricesM1[2] &&
       zzPricesM1[2] >= zzPricesM1[4] &&
-      //zzPricesM1[4] >= zzPricesM1[6] &&
+      zzPricesM1[4] >= zzPricesM1[6] &&
 
       zzPricesM1[1] > zzPricesM1[3] &&
-      //zzPricesM1[3] > zzPricesM1[5] &&
+      zzPricesM1[3] > zzPricesM1[5] &&
 
       MathAbs(zzPricesM1[0] - zzPricesM1[5]) >= 0.7)
      {
-      countCandidate ++;
-      
       if(ReversalPADetector(1, message))
-        {
-         countBullishReversal ++;
-         
-         StopLoss = 2 * zzPricesM1[0] - zzPricesM1[1];
-         if(StopLoss < Bid)
-            return false;
-            
-         if(IsMarginSafe(Bid, -1, tp))
-            IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5, StopLoss + sl, "Bullish -> Bearish - " + message);
-         else
-            Print("Not enough Margin to place order!");
-        }
+         IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5,zzPricesM1[0] + (sl*10*_Point), "Bullish -> Bearish - " + message);
       else
          if(SwingHighPADetector(2, message))
-           {
-            countBullish ++;
-
-            StopLoss = zzPricesM1[1];
-            if(StopLoss > Ask)
-               return false;
-               
-            if(IsMarginSafe(Ask, 1, tp))
-               IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5, StopLoss - sl, "Bullish In - " + message);
-            else
-               Print("Not enough Margin to place order!");
-           }
+            IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[1] - (sl*10*_Point), "Bullish In - " + message);
 
       if(IsOrderOpen)
          return true;
@@ -1086,8 +1166,7 @@ bool CheckSwingLow()
    string message;
    double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-   double StopLoss;
-   
+
 //+------------------------------------------------------------------+
 //|     熊市直落                                                       |
 //+------------------------------------------------------------------+
@@ -1102,49 +1181,25 @@ bool CheckSwingLow()
 //|                        \                                         |
 //|                         + 0                                      |
 //+------------------------------------------------------------------+
-   if(zzIndexM1 >= 4 &&
-      //zzPricesM1[6] < zzPricesM1[5] &&
+   if(zzIndexM1 >= 6 &&
+      zzPricesM1[6] < zzPricesM1[5] &&
       zzPricesM1[4] < zzPricesM1[3] &&
       zzPricesM1[2] < zzPricesM1[1] &&
 
       zzPricesM1[0] < zzPricesM1[2] &&
       zzPricesM1[2] <= zzPricesM1[4] &&
-      //zzPricesM1[4] <= zzPricesM1[6] &&
+      zzPricesM1[4] <= zzPricesM1[6] &&
 
       zzPricesM1[1] < zzPricesM1[3] &&
-      //zzPricesM1[3] < zzPricesM1[5] &&
+      zzPricesM1[3] < zzPricesM1[5] &&
 
       MathAbs(zzPricesM1[0] - zzPricesM1[5]) >= 0.7)
      {
-      countCandidate ++;
-      
       if(ReversalPADetector(-1, message))
-        {
-         countBearishReversal ++;
-         
-         StopLoss = 2 * zzPricesM1[0] - zzPricesM1[1];
-         if(StopLoss > Ask)
-            return false;
-         
-         if(IsMarginSafe(Ask, 1, tp))
-            IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5, StopLoss - sl, "Bearish -> Bullish - " + message);
-         else
-            Print("Not enough Margin to place order!");
-        }
+         IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[0] - (sl*10*_Point), "Bearish -> Bullish - " + message);
       else
          if(SwingLowPADetector(2, message))
-           {
-            countBearish ++;
-            
-            StopLoss = zzPricesM1[1];
-            if(StopLoss < Bid)
-               return false;
-            
-            if(IsMarginSafe(Bid, -1, tp))
-               IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5, zzPricesM1[1] + sl, "Bearish In - " + message);
-            else
-               Print("Not enough Margin to place order!");
-           }
+            IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5,zzPricesM1[1] + (sl*10*_Point), "Bearish In - " + message);
 
       if(IsOrderOpen)
          return true;
@@ -1196,7 +1251,7 @@ enum HIGH_LEVEL_TREND
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
-HIGH_LEVEL_TREND CheckHighLevelTrend()
+HIGH_LEVEL_TREND CheckHighLeveTrend()
   {
 
 //+------------------------------------------------------------------+
@@ -1222,18 +1277,17 @@ HIGH_LEVEL_TREND CheckHighLevelTrend()
 //|       \ /                                                        |
 //|        + 5                                                       |
 //+------------------------------------------------------------------+
-   if(zzIndexMh >= 4 &&
-      //zzPricesMh[6] > zzPricesMh[5] &&
+   if(zzIndexMh >= 6 &&
+      zzPricesMh[6] > zzPricesMh[5] &&
       zzPricesMh[4] > zzPricesMh[3] &&
       zzPricesMh[2] > zzPricesMh[1] &&
 
       zzPricesMh[0] > zzPricesMh[2] &&
       zzPricesMh[2] >= zzPricesMh[4] &&
-      //zzPricesMh[4] >= zzPricesMh[6] &&
+      zzPricesMh[4] >= zzPricesMh[6] &&
 
-      zzPricesMh[1] > zzPricesMh[3])
-      //zzPricesMh[1] > zzPricesMh[3] &&
-      //zzPricesMh[3] > zzPricesMh[5])
+      zzPricesMh[1] > zzPricesMh[3] &&
+      zzPricesMh[3] > zzPricesMh[5])
       return TREND_HIGH;
 
 //+------------------------------------------------------------------+
@@ -1279,18 +1333,17 @@ HIGH_LEVEL_TREND CheckHighLevelTrend()
 //|                        \                                         |
 //|                         + 0                                      |
 //+------------------------------------------------------------------+
-   if(zzIndexMh >= 4 &&
-      //zzPricesMh[6] < zzPricesMh[5] &&
+   if(zzIndexMh >= 6 &&
+      zzPricesMh[6] < zzPricesMh[5] &&
       zzPricesMh[4] < zzPricesMh[3] &&
       zzPricesMh[2] < zzPricesMh[1] &&
 
       zzPricesMh[0] < zzPricesMh[2] &&
       zzPricesMh[2] <= zzPricesMh[4] &&
-      //zzPricesMh[4] <= zzPricesMh[6] &&
+      zzPricesMh[4] <= zzPricesMh[6] &&
 
-      zzPricesMh[1] < zzPricesMh[3])
-      //zzPricesMh[1] < zzPricesMh[3] &&
-      //zzPricesMh[3] < zzPricesMh[5])
+      zzPricesMh[1] < zzPricesMh[3] &&
+      zzPricesMh[3] < zzPricesMh[5])
       return TREND_LOW;
 
 //+------------------------------------------------------------------+
@@ -1356,11 +1409,6 @@ void OnDeinit(const int reason)
 //--- destroy timer
    EventKillTimer();
 
-   Print("\n\nBearish count: ", countBearish);
-   Print("Bearish R count: ", countBearishReversal);
-   Print("Bullish count: ", countBullish);
-   Print("Bullish R count: ", countBullishReversal);
-   Print("\n\nCandidate count: ", countCandidate);
   }
 //+------------------------------------------------------------------+
 //| Expert tick function                                             |
@@ -1376,7 +1424,7 @@ void OnTick()
       //---- Candle1 OHLC
       MqlRates prices[], p, pp, ppp;
       ArraySetAsSeries(prices, true);
-      CopyRates(_Symbol, zzTimeFrame, 0, 3, prices);
+      CopyRates(_Symbol, PERIOD_M1, 0, 3, prices);
 
       p = prices[0];
       pp = prices[1];
@@ -1436,7 +1484,7 @@ void OnTick()
         }
 
       // Protect profits for LONG.
-      if(OrderType == BUY_ORDER && p.close > OrderPrice + ORDER_MARGIN)
+      if(OrderType == BUY_ORDER && p.close > OrderPrice + (tp*10*_Point))
         {
 
          //---- Pattern 1 - bearish doji
@@ -1482,7 +1530,7 @@ void OnTick()
         }
 
       // Protect profits for SHORT.
-      if(OrderType == SELL_ORDER && p.close < OrderPrice - ORDER_MARGIN)
+      if(OrderType == SELL_ORDER && p.close < OrderPrice - (tp*10*_Point))
         {
 
          //---- Pattern 1 - bearish
@@ -1574,7 +1622,7 @@ void OnTimer()
 // is time to place order ?
    if(!IsOrderOpen)
      {
-      HIGH_LEVEL_TREND  trend = CheckHighLevelTrend();
+      HIGH_LEVEL_TREND  trend = CheckHighLeveTrend();
       //if (trend == TREND_HIGH)
       //
       //if (trend == TREND_LOW)
