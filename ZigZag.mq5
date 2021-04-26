@@ -97,7 +97,7 @@ int countCandidate = 0;
 //--- input parameters
 input double   lots=0.1;
 double   tp=21 * 10 * _Point;
-double   sl=14 * 10 * _Point;
+double   sl=5 * 10 * _Point;
 
 double ORDER_MARGIN; // = tp*10*_Point * 1;
 
@@ -539,8 +539,8 @@ int CalculateZigZag(MqlRates& prices[], double& zzPrices[], datetime& zzTimes[])
 
 //---
    int    i=0;
-   int    start = 0, extreme_search = Extremum;
-   int    shift = 0, last_high_pos = 0,last_low_pos = 0;
+   int    start = 0, extreme_search = Extremum, extreme_start;
+   int    shift = 0, last_high_pos = 0,last_low_pos = 0, back;
    double val = 0, res = 0;
    double last_high = 0, last_low = 0;
 
@@ -607,6 +607,8 @@ int CalculateZigZag(MqlRates& prices[], double& zzPrices[], datetime& zzTimes[])
                   extreme_search = Bottom;
                   ZigZagBuffer[shift] = last_high;
                   res = 1;
+                  
+                  extreme_start = shift;
                  }
                if(LowMapBuffer[shift] != 0.0)
                  {
@@ -615,6 +617,8 @@ int CalculateZigZag(MqlRates& prices[], double& zzPrices[], datetime& zzTimes[])
                   extreme_search = Peak;
                   ZigZagBuffer[shift] = last_low;
                   res = 1;
+                  
+                  extreme_start = shift;
                  }
               }
             break;
@@ -623,11 +627,25 @@ int CalculateZigZag(MqlRates& prices[], double& zzPrices[], datetime& zzTimes[])
               {
                val = HighMapBuffer[shift];
 
-               if(val - last_low > InpDeviation * _Point)
+               if(val - last_low > InpDeviation * _Point ||
+                  last_low_pos == extreme_start)
                  {
                   last_high = val;
                   last_high_pos = shift;
                   ZigZagBuffer[shift] = last_high;
+                 }
+               else
+                 {
+                  ZigZagBuffer[last_low_pos] = 0;
+                  back = last_low_pos + 1;
+                  while(back < span && ZigZagBuffer[back] == 0)
+                     back ++;
+
+                  if (back == span)
+                     Print("Exception !!!");
+                     
+                  last_high = ZigZagBuffer[back];
+                  last_high_pos = back;
                  }
                extreme_search = Bottom;
               }
@@ -639,11 +657,26 @@ int CalculateZigZag(MqlRates& prices[], double& zzPrices[], datetime& zzTimes[])
               {
                val = LowMapBuffer[shift];
 
-               if(last_high - val > InpDeviation * _Point)
+               if(last_high - val > InpDeviation * _Point ||
+                  last_high_pos == extreme_start)
                  {
                   last_low = val;
                   last_low_pos = shift;
                   ZigZagBuffer[shift] = last_low;
+                 }
+               else
+                 {
+                  ZigZagBuffer[last_high_pos] = 0;
+
+                  back = last_high_pos + 1;
+                  while (back < span && ZigZagBuffer[back] == 0)
+                    back ++;
+
+                  if (back == span)
+                     Print("Exception !!!");
+
+                  last_low = ZigZagBuffer[back];
+                  last_low_pos = back;
                  }
                extreme_search = Peak;
               }
@@ -760,6 +793,7 @@ bool SwingHighPADetector(int type, string& message)
             message = "Hopping";
             return true;
            }
+         /*
          if(IsBullishEngulfing(p3, p4) && !IsBearishHopping(p1, p2) && !IsBearishDoji(p1, p2))
            {
             message = "Engulfing";
@@ -770,6 +804,7 @@ bool SwingHighPADetector(int type, string& message)
             message = "Doji";
             return true;
            }
+         */
          //  }
          break;
      }
@@ -838,7 +873,7 @@ bool SwingLowPADetector(int type, string& message)
             return true;
            }
            
-          
+         /*
          if(IsBearishEngulfing(p3, p4) && !IsBullishHopping(p1, p2))
            {
             message = "Engulfing";
@@ -849,6 +884,7 @@ bool SwingLowPADetector(int type, string& message)
             message = "Doji";
             return true;
            }
+         */
          //  }
          break;
      }
@@ -904,7 +940,7 @@ bool ReversalPADetector(int type, string& message)
            }
 
          //--- End of Rejected.
-
+         /*
          if(IsBullishDoji(p3, p4) && IsBearishHopping(p1, p2))
            {
             message = "Doji Hopping";
@@ -922,7 +958,7 @@ bool ReversalPADetector(int type, string& message)
             message = "Hopping + Bearish Hopping";
             return true;
            }
-
+         */
          break;
       case -1:
          //--- Pattern: Rejected.
@@ -942,7 +978,7 @@ bool ReversalPADetector(int type, string& message)
             return true;
            }
          //--- End of Rejected.
-
+         /*
          if(IsBearishDoji(p3, p4) && IsBullishHopping(p1, p2))
            {
             message = "Doji Hopping";
@@ -960,7 +996,7 @@ bool ReversalPADetector(int type, string& message)
             message = "Hopping + Bullish Hopping";
             return true;
            }
-
+         */
          break;
      }
    return false;
@@ -978,7 +1014,8 @@ bool CheckSwingHigh()
    double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    double StopLoss;
-   
+   double delta = MathAbs(zzPricesM1[3] - zzPricesM1[0]);
+      
 //+------------------------------------------------------------------+
 //|     牛市直衝                                                       |
 //+------------------------------------------------------------------+
@@ -1005,7 +1042,7 @@ bool CheckSwingHigh()
       zzPricesM1[1] > zzPricesM1[3] &&
       //zzPricesM1[3] > zzPricesM1[5] &&
 
-      MathAbs(zzPricesM1[0] - zzPricesM1[5]) >= 0.7)
+      delta >= 1.5 && delta <= 3)
      {
       countCandidate ++;
       
@@ -1013,28 +1050,28 @@ bool CheckSwingHigh()
         {
          countBullishReversal ++;
          
-         StopLoss = 2 * zzPricesM1[0] - zzPricesM1[1];
+         StopLoss = 2 * zzPricesM1[0] - zzPricesM1[3];
          if(StopLoss < Bid)
             return false;
             
-         if(IsMarginSafe(Bid, -1, tp))
+         //if(IsMarginSafe(Bid, -1, tp))
             IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5, StopLoss + sl, "Bullish -> Bearish - " + message);
-         else
-            Print("Not enough Margin to place order!");
+         //else
+         //   Print("Not enough Margin to place order!");
         }
       else
          if(SwingHighPADetector(2, message))
            {
             countBullish ++;
 
-            StopLoss = zzPricesM1[1];
+            StopLoss = zzPricesM1[3];
             if(StopLoss > Ask)
                return false;
                
-            if(IsMarginSafe(Ask, 1, tp))
+            //if(IsMarginSafe(Ask, 1, tp))
                IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5, StopLoss - sl, "Bullish In - " + message);
-            else
-               Print("Not enough Margin to place order!");
+            //else
+            //   Print("Not enough Margin to place order!");
            }
 
       if(IsOrderOpen)
@@ -1064,7 +1101,7 @@ bool CheckSwingHigh()
       zzPricesM1[1] > zzPricesM1[3] &&
       zzPricesM1[0] > zzPricesM1[3] &&
 
-      MathAbs(zzPricesM1[4] - zzPricesM1[1]) >= 0.7 &&
+      MathAbs(zzPricesM1[4] - zzPricesM1[1]) >= 1.5 &&
       SwingHighPADetector(1, message))
      {
       //IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5,zzPricesM1[2] - (sl*10*_Point));
@@ -1087,6 +1124,7 @@ bool CheckSwingLow()
    double Bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double Ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    double StopLoss;
+   double delta = MathAbs(zzPricesM1[3] - zzPricesM1[0]);
    
 //+------------------------------------------------------------------+
 //|     熊市直落                                                       |
@@ -1114,7 +1152,7 @@ bool CheckSwingLow()
       zzPricesM1[1] < zzPricesM1[3] &&
       //zzPricesM1[3] < zzPricesM1[5] &&
 
-      MathAbs(zzPricesM1[0] - zzPricesM1[5]) >= 0.7)
+      delta >= 1.5 && delta <= 3)
      {
       countCandidate ++;
       
@@ -1122,28 +1160,28 @@ bool CheckSwingLow()
         {
          countBearishReversal ++;
          
-         StopLoss = 2 * zzPricesM1[0] - zzPricesM1[1];
+         StopLoss = 2 * zzPricesM1[0] - zzPricesM1[3];
          if(StopLoss > Ask)
             return false;
          
-         if(IsMarginSafe(Ask, 1, tp))
+         //if(IsMarginSafe(Ask, 1, tp))
             IsOrderOpen = PlaceOrder(BUY_ORDER,lots,Ask,5, StopLoss - sl, "Bearish -> Bullish - " + message);
-         else
-            Print("Not enough Margin to place order!");
+         //else
+         //   Print("Not enough Margin to place order!");
         }
       else
          if(SwingLowPADetector(2, message))
            {
             countBearish ++;
             
-            StopLoss = zzPricesM1[1];
+            StopLoss = zzPricesM1[3];
             if(StopLoss < Bid)
                return false;
             
-            if(IsMarginSafe(Bid, -1, tp))
-               IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5, zzPricesM1[1] + sl, "Bearish In - " + message);
-            else
-               Print("Not enough Margin to place order!");
+            //if(IsMarginSafe(Bid, -1, tp))
+               IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5, StopLoss + sl, "Bearish In - " + message);
+            //else
+            //   Print("Not enough Margin to place order!");
            }
 
       if(IsOrderOpen)
@@ -1171,7 +1209,7 @@ bool CheckSwingLow()
 
       zzPricesM1[1] < zzPricesM1[3] &&
       zzPricesM1[0] < zzPricesM1[3] &&
-      MathAbs(zzPricesM1[4] - zzPricesM1[1]) >= 0.7 &&
+      MathAbs(zzPricesM1[4] - zzPricesM1[1]) >= 1.5 &&
       SwingLowPADetector(1, message))
      {
       //IsOrderOpen = PlaceOrder(SELL_ORDER,lots,Bid,5,zzPricesM1[2] + (sl*10*_Point));
