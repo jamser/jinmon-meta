@@ -52,6 +52,7 @@ void OnDeinit(const int reason)
 
    IndicatorRelease(OBVm1_handle);
    IndicatorRelease(OBVm15_handle);
+   IndicatorRelease(ZigZag_handle);
   }
 //+------------------------------------------------------------------+
 //| Expert tick function                                             |
@@ -272,7 +273,7 @@ int CalculateSRL(const int rates_total, const int prev_calculated, const int off
          if(d > prLow(i) && d < prHigh(i))
             CrossBarsNum[di] ++;
       if(Time != TMaxI && TMaxI != 0)
-         if(d > prLow(iBarShift(NULL,0,TMaxI))&& d < prHigh(iBarShift(NULL, TimePeriod, TMaxI)))
+         if(d > prLow(iBarShift(NULL, TimePeriod,TMaxI))&& d < prHigh(iBarShift(NULL, TimePeriod, TMaxI)))
             CrossBarsNum[di] --;
      }
    TMaxI = Time;
@@ -417,6 +418,7 @@ void CheckDivergence()
             state = HIT_SUPPORT_LINE;
             PrevSL1 = SL;
             SLTime = iTime(NULL, PERIOD_M15, 0);
+            SendNotification("Hit Support Line " + SL);
             return ;
            }
          if(state == HIT_SUPPORT_LINE)
@@ -426,6 +428,7 @@ void CheckDivergence()
                // Still falling, reset state !!!
                PrevSL1 = SL;
                SLTime = iTime(NULL, PERIOD_M15, 0);
+               SendNotification("Hit Support Line " + SL);
               }
 
             if(PrevSL1 < SL)
@@ -449,6 +452,7 @@ void CheckDivergence()
                state = HIT_SUPPORT_LINE;
                PrevSL1 = SL;
                SLTime = iTime(NULL, PERIOD_M15, 0);
+               SendNotification("Hit Support Line " + SL);
                return ;
               }
             if(PrevSL1 < SL && SL < PrevSL2)
@@ -457,6 +461,7 @@ void CheckDivergence()
             if(SL == PrevSL1)
               {
                state = BACK_TO_SUPPORT_LINE;
+               SendNotification("[OBV Diver] Prepare to BUY : " + SL);
               }
            }
 
@@ -488,11 +493,15 @@ void CheckDivergence()
 
    if(pins >= 2)
      {
+      double close1 = iClose(NULL, PERIOD_M15, 0);
+      double close2 = iClose(NULL, PERIOD_M15, shift);
+
       obvCount = CopyBuffer(OBVm15_handle, 0, 0, OBV_BUFFER_SIZE, obvValues);
       if(obvCount <= 0)
          PrintFormat("Copied OBV count = %d", obvCount);
       else
-         if(obvValues[OBV_BUFFER_SIZE - 1] > obvValues[OBV_BUFFER_SIZE - 1 - shift])
+         if(close1 < close2 &&
+            obvValues[OBV_BUFFER_SIZE - 1] > obvValues[OBV_BUFFER_SIZE - 1 - shift])
            {
             //--- Gotcha
             BuyTimeM15 = iTime(NULL, PERIOD_M15, 0);
@@ -503,6 +512,7 @@ void CheckDivergence()
 
             datetime buyTime = iTime(NULL, PERIOD_M1, 0);
             PrintFormat("%s - Buy at %f - back : %d", TimeToString(buyTime, TIME_DATE|TIME_MINUTES), SL, shift);
+            SendNotification("[OBV Diver] You CAN BUY IT : " + SL);
            }
       // Job Done !!!
       return ;

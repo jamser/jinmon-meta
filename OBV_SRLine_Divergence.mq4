@@ -420,7 +420,7 @@ void CheckDivergence()
             if(SL == PrevSL1)
               {
                state = BACK_TO_SUPPORT_LINE;
-               SendNotification("Prepare to BUY : " + SL);
+               SendNotification("[OBV Diver] Prepare to BUY : " + SL);
               }
            }
 
@@ -458,8 +458,11 @@ void CheckDivergence()
       //mql5 else
       double obv1 = iOBV(NULL, PERIOD_M15, PRICE_CLOSE, 0);
       double obv2 = iOBV(NULL, PERIOD_M15, PRICE_CLOSE, shift);
+      double close1 = iClose(NULL, PERIOD_M15, 0);
+      double close2 = iClose(NULL, PERIOD_M15, shift);
          //mql5 if(obvValues[OBV_BUFFER_SIZE - 1] > obvValues[OBV_BUFFER_SIZE - 1 - shift])
-         if(obv1 > obv2)
+         if(close1 < close2 &&
+            obv1 > obv2)
            {
             //--- Gotcha
             BuyTimeM15 = iTime(NULL, PERIOD_M15, 0);
@@ -470,7 +473,7 @@ void CheckDivergence()
 
             datetime buyTime = iTime(NULL, PERIOD_M1, 0);
             PrintFormat("%s - Buy at %f - back : %d", TimeToString(buyTime, TIME_DATE|TIME_MINUTES), SL, shift);
-            SendNotification("OK! You CAN BUY IT\n[OBV Divergence]" + SL);
+            SendNotification("[OBV Diver] BUY IT : " + SL);
            }
       // Job Done !!!
       return ;
