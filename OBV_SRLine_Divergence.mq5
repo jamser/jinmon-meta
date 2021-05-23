@@ -30,7 +30,7 @@ int OnInit()
 //---
    InitSRLines();
 
-   TotalBars = iBars(NULL, 0);
+   TotalBars = iBars(NULL, TimePeriod);
    for(int offset = MaxLimit * BackTrackDays; offset > 0; offset -= MaxLimit)
       CalculateSRL(TotalBars, 0, offset);
 
@@ -68,7 +68,7 @@ void OnTimer()
   {
 //---
 //PrintFormat("%d - %d", TotalBars, PreviousCalculatedBars);
-   TotalBars = iBars(NULL, PERIOD_M1);
+   TotalBars = iBars(NULL, TimePeriod);
    if(TotalBars > PreviousCalculatedBars)
      {
       PreviousCalculatedBars = CalculateSRL(TotalBars, PreviousCalculatedBars, 0);
@@ -232,7 +232,7 @@ void InitSRLines()
 int CalculateSRL(const int rates_total, const int prev_calculated, const int offset = 0)
   {
 //---
-   int   Bars = iBars(NULL, PERIOD_M1);
+   int   Bars = iBars(NULL, TimePeriod);
    int   limit = MathMin(Bars - prev_calculated, MaxLimit);
 
    double dL = prLow(iLowest(NULL, TimePeriod, MODE_LOW, limit, offset));
@@ -272,7 +272,7 @@ int CalculateSRL(const int rates_total, const int prev_calculated, const int off
          if(d > prLow(i) && d < prHigh(i))
             CrossBarsNum[di] ++;
       if(Time != TMaxI && TMaxI != 0)
-         if(d > prLow(iBarShift(NULL,0,TMaxI))&& d < prHigh(iBarShift(NULL, 0, TMaxI)))
+         if(d > prLow(iBarShift(NULL,0,TMaxI))&& d < prHigh(iBarShift(NULL, TimePeriod, TMaxI)))
             CrossBarsNum[di] --;
      }
    TMaxI = Time;
