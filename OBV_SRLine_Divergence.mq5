@@ -240,7 +240,7 @@ int CalculateSRL(const int rates_total, const int prev_calculated, const int off
 
    if(dL < dLNum || dHNum < dH)
      {
-      int bufferSize = (MathMax(dHNum, dH) - MathMin(dLNum, dL)) * 10 + 1;
+      int bufferSize = (MathMax(dHNum, dH) - MathMin(dLNum, dL)) * 10 + 10;
 
       ArrayResize(CrossBarsNum, bufferSize, 500);
       ArrayResize(CrossBarsMin, bufferSize, 500);
