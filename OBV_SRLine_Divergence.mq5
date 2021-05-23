@@ -10,6 +10,12 @@
 //--- Indicator management.
 int TotalBars = 0;
 int PreviousCalculatedBars = 0;
+int OBV_handle;
+
+#define OBV_BUFFER_SIZE  60 * 12
+
+double obvValues[OBV_BUFFER_SIZE];
+int obvCount = 0;
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
@@ -25,6 +31,9 @@ int OnInit()
    TotalBars = iBars(NULL, 0);
    for (int offset = MaxLimit * BackTrackDays; offset > 0; offset -= MaxLimit)
       CalculateSRL(TotalBars, 0, offset);
+
+//--- Create OBV Indicator.
+   OBV_handle = iCustom(NULL, TimePeriod, "Examples\\OBV");
 
    return(INIT_SUCCEEDED);
   }
@@ -56,6 +65,12 @@ void OnTimer()
    if (TotalBars > PreviousCalculatedBars) {
       PreviousCalculatedBars = CalculateSRL(TotalBars, PreviousCalculatedBars, 0);
       PrintFormat("Calculate ... %d - %d", TotalBars, PreviousCalculatedBars);
+      
+      obvCount = CopyBuffer(OBV_handle, 0, 0, OBV_BUFFER_SIZE, obvValues);
+      if (obvCount <= 0)
+         PrintFormat("Copied OBV count = %d", obvCount);
+      else
+         CheckDivergence();      
    }
   }
 //+------------------------------------------------------------------+
@@ -121,7 +136,9 @@ string Alphabet[] = {"i","h","g","f","e","d","c","b","a"};
 
 int CrossBarsNum[];
 bool CrossBarsMin[];
-double d1Num =0.0, d2Num = 0.0;
+
+#define LOWEST_PRICE_INIT_VALUE  100000.0
+double dLNum = LOWEST_PRICE_INIT_VALUE, dHNum = 0.0;
 
 datetime TMaxI = 0;
 
@@ -211,30 +228,40 @@ int CalculateSRL(const int rates_total, const int prev_calculated, const int off
   {
 //---
    int   Bars = iBars(NULL, 0);
-   int   limit = MaxLimit; //MathMin(Bars - prev_calculated, MaxLimit);
+   int   limit = MathMin(Bars - prev_calculated, MaxLimit);
 
-   double d1 = prLow(iLowest(NULL, TimePeriod, MODE_LOW, limit, offset));
-   double d2 = prHigh(iHighest(NULL, TimePeriod, MODE_HIGH, limit, offset));
+   double dL = prLow(iLowest(NULL, TimePeriod, MODE_LOW, limit, offset));
+   double dH = prHigh(iHighest(NULL, TimePeriod, MODE_HIGH, limit, offset));
 
-   if(d1Num!=d1||d2Num!=d2)
+   if(dL < dLNum || dHNum < dH)
      {
-      ArrayResize(CrossBarsNum, (d2 - d1) * 10 + 1);
-      ArrayResize(CrossBarsMin, (d2 - d1) * 10 + 1);
-      if(d1Num!=d1&&d1Num!=0.0)
+      int bufferSize = (MathMax(dHNum, dH) - MathMin(dLNum, dL)) * 10 + 1;
+      
+      ArrayResize(CrossBarsNum, bufferSize, 500);
+      ArrayResize(CrossBarsMin, bufferSize, 500);
+      
+      if(dL < dLNum && dLNum != LOWEST_PRICE_INIT_VALUE)
         {
-         ArrayCopy(CrossBarsNum, CrossBarsNum, 0, (d1Num - d1) * 10 + 1);
-         ArrayCopy(CrossBarsMin, CrossBarsMin, 0, (d1Num - d1) * 10 + 1);
+         int offset = int(dLNum - dL) * 10;
+         for (int i = offset - 1; i >= 0; i --)
+           {
+            CrossBarsNum[i + offset] = CrossBarsNum[i];
+            CrossBarsMin[i + offset] = CrossBarsMin[i];
+           }
         }
-      d1Num=d1;
-      d2Num=d2;
+
+      if (dL < dLNum)
+         dLNum = dL;
+      if (dHNum < dH)
+         dHNum = dH;
      }
 
 
    datetime Time = iTime(NULL, TimePeriod, limit + offset);
 
-   for(double d = d1; d <= d2; d += 0.1)
+   for(double d = dL; d <= dH; d += 0.1)
      {
-      int di = (d - d1) * 10;
+      int di = (d - dLNum) * 10;
       for(int i = 1 + offset; i < limit + offset; i ++)
          if(d > prLow(i) && d < prHigh(i))
             CrossBarsNum[di] ++;
@@ -245,13 +272,16 @@ int CalculateSRL(const int rates_total, const int prev_calculated, const int off
    TMaxI = Time;
 
    double l = MaxR * 10;
-   for(double d = d1 + MaxR; d <= d2 - MaxR; d += 0.1)
+   for(double d = dL + MaxR + 0.1; d <= dH - MaxR - 0.1; d += 0.1)
      {
-      int di = (d - d1) * 10;
+      int di = (d - dLNum) * 10;
+      int MaxIndex = ArrayMaximum(CrossBarsNum, di - l, 2 * l);
+      int MinIndex = ArrayMinimum(CrossBarsNum, di - l, 2 * l);
+      
       if(!CrossBarsMin[di] && //CrossBarsNum[di]<MaxCrossesLevel&&
-         CrossBarsNum[ArrayMaximum(CrossBarsNum, 2 * l, di - l)] - CrossBarsNum[ArrayMinimum(CrossBarsNum, 2 * l, di - l)] > MaxCrossesLevel &&
-         CrossBarsNum[di]     == CrossBarsNum[ArrayMinimum(CrossBarsNum, 2 * l, di - l)] &&
-         CrossBarsNum[di - 1] != CrossBarsNum[ArrayMinimum(CrossBarsNum, 2 * l, di - l)])
+         CrossBarsNum[MaxIndex] - CrossBarsNum[MinIndex] > MaxCrossesLevel &&
+         CrossBarsNum[di]     == CrossBarsNum[MinIndex] &&
+         CrossBarsNum[di - 1] != CrossBarsNum[MinIndex])
         {
          CrossBarsMin[di] = true;
          LineName[LineIndex] = Period2AlpthabetString(TimePeriod) + TimePeriod + "_" + d;
@@ -263,7 +293,7 @@ int CalculateSRL(const int rates_total, const int prev_calculated, const int off
          LineIndex ++;
         }
 
-      if(CrossBarsMin[di] && CrossBarsNum[di] != CrossBarsNum[ArrayMinimum(CrossBarsNum, 2 * l, di - l)])
+      if(CrossBarsMin[di] && CrossBarsNum[di] != CrossBarsNum[MinIndex])
         {
          CrossBarsMin[di] = false;
          ObjectDelete(0, Period2AlpthabetString(TimePeriod) + TimePeriod + "_" + d);
@@ -272,4 +302,13 @@ int CalculateSRL(const int rates_total, const int prev_calculated, const int off
 //--- return value of prev_calculated for next call
    return(rates_total);
   }
+
 //+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//| Divergence Verification Algorithms                               |
+//+------------------------------------------------------------------+
+void CheckDivergence()
+  {
+   
+  }
