@@ -319,9 +319,9 @@ datetime BuyTimeM15 = 0;
 double BuySL = 0;
 
 //---
-double PrevSL1 = 0;
-double PrevSL2 = 0;
-datetime SLTime = 0;
+extern double PrevSL1 = 0;
+extern double PrevSL2 = 0;
+extern datetime SLTime = 0;
 
 DIVERGENCE_CHECK_STATE state = NA_STATE;
 
@@ -338,7 +338,7 @@ void CheckDivergence()
       return ;
 
 //--- Expired SL Time.
-   if(iBarShift(NULL, PERIOD_M15, SLTime) > 12)
+   if(SLTime != 0 && iBarShift(NULL, PERIOD_M15, SLTime) > 15)
      {
       SLTime = 0;
       PrevSL1 = 0;
@@ -403,6 +403,7 @@ void CheckDivergence()
               {
                // Going Up !
                PrevSL2 = SL;
+               SendNotification("Bouncing Up to " + SL);
                return ;
               }
             if(SL < PrevSL1)
@@ -415,6 +416,7 @@ void CheckDivergence()
                return ;
               }
             if(PrevSL1 < SL && SL < PrevSL2)
+               // Need to Check.
                return ;
 
             if(SL == PrevSL1)
@@ -473,7 +475,7 @@ void CheckDivergence()
 
             datetime buyTime = iTime(NULL, PERIOD_M1, 0);
             PrintFormat("%s - Buy at %f - back : %d", TimeToString(buyTime, TIME_DATE|TIME_MINUTES), SL, shift);
-            SendNotification("[OBV Diver] BUY IT : " + SL);
+            SendNotification("BUY IT at Lower SL\n[OBV DIV] " + SL + " / shift: " + shift);
            }
       // Job Done !!!
       return ;
