@@ -98,10 +98,24 @@ void OnTimer()
 
             if(action == CLOSE_ORDER)
                CloseOrder();
-            if(action == SELL_ORDER && PositionsTotal() == 0)
-               trade.Sell(lot, NULL, 0, stoploss);
-            if(action == BUY_ORDER && PositionsTotal() == 0)
-               trade.Buy(lot, NULL, 0, stoploss);
+
+            if(action == SELL_ORDER)
+              {
+               if(PositionsTotal() == 0)
+                  trade.Sell(lot, NULL, 0, stoploss);
+               else
+                  if(position.PositionType() == POSITION_TYPE_BUY)
+                     CloseOrder();
+              }
+
+            if(action == BUY_ORDER)
+              {
+               if(PositionsTotal() == 0)
+                  trade.Buy(lot, NULL, 0, stoploss);
+               else
+                  if(position.PositionType() == POSITION_TYPE_SELL)
+                     CloseOrder();
+              }
            }
         }
       else
@@ -167,4 +181,6 @@ bool CloseOrder()
 
    return false;
   }
+//+------------------------------------------------------------------+
+
 //+------------------------------------------------------------------+
