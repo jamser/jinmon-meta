@@ -18,6 +18,7 @@ input long     order_magic = 55555;
 input double   orderLot=0;
 input int      pollingInterval=3;
 input bool     verbose=false;
+input string   agentCallback = "http://127.0.0.1/";
 
 //--- Trade variables.
 const string   SELL_ORDER = "sell";
@@ -68,7 +69,7 @@ void OnTimer()
    string cookie = NULL, headers;
    char post[], result[];
 
-   int res = WebRequest("POST", "http://127.0.0.1/mt/poll/", cookie, NULL, 500, post, 0, result, headers);
+   int res = WebRequest("POST", agentCallback + "mt/poll/", cookie, NULL, 500, post, 0, result, headers);
    if(res==-1)
      {
       Print("Error in WebRequest. Error code  =",GetLastError());
