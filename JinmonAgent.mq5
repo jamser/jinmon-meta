@@ -15,7 +15,8 @@
 //--- input parameters
 input long     order_magic = 55555;
 
-input int      pollingInterval=5;
+input double   orderLot=0;
+input int      pollingInterval=3;
 input bool     verbose=false;
 
 //--- Trade variables.
@@ -88,7 +89,7 @@ void OnTimer()
             CJAVal jv;
             jv.Deserialize(result);
 
-            const double lot = jv["l"].ToDbl();
+            const double lot = orderLot ? orderLot : jv["l"].ToDbl();
             const double stoploss = jv["sl"].ToDbl();
             const string action = jv["a"].ToStr();
 
