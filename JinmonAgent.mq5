@@ -18,6 +18,7 @@ input long     order_magic = 55555;
 input double   orderLot=0;
 input int      pollingInterval=3;
 input bool     verbose=false;
+input bool     dryRun=false;
 input string   agentCallback = "http://127.0.0.1/";
 
 //--- Trade variables.
@@ -74,7 +75,8 @@ void OnTimer()
      {
       Print("Error in WebRequest. Error code  =",GetLastError());
       //--- Perhaps the URL is not listed, display a message about the necessity to add the address
-      MessageBox("Add the address to the list of allowed URLs on tab 'Expert Advisors'","Error",MB_ICONINFORMATION);
+      //MessageBox("Add the address to the list of allowed URLs on tab 'Expert Advisors'","Error",MB_ICONINFORMATION);
+      Print("Add the address [", agentCallback, "] to the list of allowed URLs on tab 'Expert Advisors'");
      }
    else
      {
@@ -97,6 +99,10 @@ void OnTimer()
             Print("Lot: ", lot);
             Print("StopLoss: ", stoploss);
             Print("Action: ", action);
+
+            // Dry-Run only for debugging.
+            if(dryRun)
+               return ;
 
             if(action == CLOSE_ORDER)
                CloseOrder();
@@ -144,29 +150,6 @@ void OnChartEvent(const int id,
 
   }
 //+------------------------------------------------------------------+
-
-//+------------------------------------------------------------------+
-//|                                                                  |
-//+------------------------------------------------------------------+
-ulong PlaceOrder(string cmd, double volume, double stoploss)
-  {
-//--- MQL5
-   MqlTradeRequest request= {};
-   request.action = TRADE_ACTION_DEAL;
-   request.magic = order_magic;
-   request.symbol = _Symbol;
-   request.type = (cmd == SELL_ORDER ? ORDER_TYPE_SELL : ORDER_TYPE_BUY);
-   request.volume = volume;
-   request.sl = stoploss;
-
-   MqlTradeResult result = {};
-   if(trade.OrderSend(request, result))
-     {
-      Print(__FUNCTION__,":",result.comment);
-      return true;
-     }
-   return false;
-  }
 
 //+------------------------------------------------------------------+
 //|                                                                  |
