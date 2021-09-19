@@ -97,9 +97,10 @@ void OnTimer()
             const double lot = orderLot ? orderLot : jv["l"].ToDbl();
             const string action = jv["a"].ToStr();
 
+            MqlTick latest_price;
+            SymbolInfoTick(_Symbol, latest_price);
+
             if (stoploss == 0){
-               MqlTick latest_price;
-               SymbolInfoTick(_Symbol, latest_price);
                stoploss = (action == SELL_ORDER) ? (latest_price.ask + slDelta) : (latest_price.bid - slDelta);
             }
             
@@ -116,20 +117,28 @@ void OnTimer()
 
             if(action == SELL_ORDER)
               {
-               if(PositionsTotal() == 0)
+               if(PositionsTotal() == 0) {
                   trade.Sell(lot, NULL, 0, stoploss);
+                  Print("Sell " + lot + " at " + latest_price.bid + ", sl: " + stoploss);
+               }
                else
-                  if(position.PositionType() == POSITION_TYPE_BUY)
+                  if(position.PositionType() == POSITION_TYPE_BUY) {
                      CloseOrder();
+                     Print("Close order");
+                  }
               }
 
             if(action == BUY_ORDER)
               {
-               if(PositionsTotal() == 0)
+               if(PositionsTotal() == 0) {
                   trade.Buy(lot, NULL, 0, stoploss);
+                  Print("Buy " + lot + " at " + latest_price.ask + ", sl: " + stoploss);
+               }
                else
-                  if(position.PositionType() == POSITION_TYPE_SELL)
+                  if(position.PositionType() == POSITION_TYPE_SELL) {
                      CloseOrder();
+                     Print("Close order");
+                  }
               }
            }
         }
