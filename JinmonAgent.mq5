@@ -15,6 +15,7 @@
 //--- input parameters
 input long     order_magic = 55555;
 
+input double   slDelta=0;
 input double   orderLot=0;
 input int      pollingInterval=3;
 input bool     verbose=false;
@@ -92,10 +93,16 @@ void OnTimer()
             CJAVal jv;
             jv.Deserialize(result);
 
+            double stoploss = jv["sl"].ToDbl();
             const double lot = orderLot ? orderLot : jv["l"].ToDbl();
-            const double stoploss = jv["sl"].ToDbl();
             const string action = jv["a"].ToStr();
 
+            if (stoploss == 0){
+               MqlTick latest_price;
+               SymbolInfoTick(_Symbol, latest_price);
+               stoploss = (action == SELL_ORDER) ? (latest_price.ask + slDelta) : (latest_price.bid - slDelta);
+            }
+            
             Print("Lot: ", lot);
             Print("StopLoss: ", stoploss);
             Print("Action: ", action);
