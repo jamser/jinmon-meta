@@ -121,7 +121,9 @@ void OnTimer()
                if(PositionsTotal() == 0)
                  {
                   trade.Sell(lot, NULL, 0, stoploss);
-                  Print("Sell " + lot + " at " + latest_price.bid + ", sl: " + stoploss);
+                  Print("--------------------");
+                  Print(">> Sell " + lot + " at " + latest_price.bid + ", sl: " + stoploss);
+                  Print("--------------------");
                  }
                else
                  {
@@ -129,7 +131,9 @@ void OnTimer()
                   if(position.PositionType() == POSITION_TYPE_BUY)
                     {
                      CloseOrder();
-                     Print("Close order");
+                     Print("--------------------");
+                     Print(">> Close order");
+                     Print("--------------------");
                     }
 
                  }
@@ -140,7 +144,9 @@ void OnTimer()
                if(PositionsTotal() == 0)
                  {
                   trade.Buy(lot, NULL, 0, stoploss);
-                  Print("Buy " + lot + " at " + latest_price.ask + ", sl: " + stoploss);
+                  Print("--------------------");
+                  Print(">> Buy " + lot + " at " + latest_price.ask + ", sl: " + stoploss);
+                  Print("--------------------");
                  }
                else
                  {
@@ -148,7 +154,9 @@ void OnTimer()
                   if(position.PositionType() == POSITION_TYPE_SELL)
                     {
                      CloseOrder();
-                     Print("Close order");
+                     Print("--------------------");
+                     Print(">> Close order");
+                     Print("--------------------");
                     }
                  }
               }
@@ -184,15 +192,13 @@ void OnChartEvent(const int id,
 //+------------------------------------------------------------------+
 bool CloseOrder()
   {
-   if(PositionsTotal() == 0)
-      return true;
-
-   if(position.SelectByIndex(0))
-      if(position.Symbol() == _Symbol)
-         if(trade.PositionClose(position.Ticket()))
-            return true;
-
-   return false;
+   while(PositionsTotal() > 0)
+     {
+      if(position.SelectByIndex(0))
+         if(!trade.PositionClose(position.Ticket()))
+            return false;
+     }
+   return true;
   }
 //+------------------------------------------------------------------+
 
