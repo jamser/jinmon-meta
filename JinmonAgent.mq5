@@ -100,10 +100,11 @@ void OnTimer()
             MqlTick latest_price;
             SymbolInfoTick(_Symbol, latest_price);
 
-            if (stoploss == 0){
+            if(stoploss == 0)
+              {
                stoploss = (action == SELL_ORDER) ? (latest_price.ask + slDelta) : (latest_price.bid - slDelta);
-            }
-            
+              }
+
             Print("Lot: ", lot);
             Print("StopLoss: ", stoploss);
             Print("Action: ", action);
@@ -117,28 +118,39 @@ void OnTimer()
 
             if(action == SELL_ORDER)
               {
-               if(PositionsTotal() == 0) {
+               if(PositionsTotal() == 0)
+                 {
                   trade.Sell(lot, NULL, 0, stoploss);
                   Print("Sell " + lot + " at " + latest_price.bid + ", sl: " + stoploss);
-               }
+                 }
                else
-                  if(position.PositionType() == POSITION_TYPE_BUY) {
+                 {
+                  position.SelectByIndex(0);
+                  if(position.PositionType() == POSITION_TYPE_BUY)
+                    {
                      CloseOrder();
                      Print("Close order");
-                  }
+                    }
+
+                 }
               }
 
             if(action == BUY_ORDER)
               {
-               if(PositionsTotal() == 0) {
+               if(PositionsTotal() == 0)
+                 {
                   trade.Buy(lot, NULL, 0, stoploss);
                   Print("Buy " + lot + " at " + latest_price.ask + ", sl: " + stoploss);
-               }
+                 }
                else
-                  if(position.PositionType() == POSITION_TYPE_SELL) {
+                 {
+                  position.SelectByIndex(0);
+                  if(position.PositionType() == POSITION_TYPE_SELL)
+                    {
                      CloseOrder();
                      Print("Close order");
-                  }
+                    }
+                 }
               }
            }
         }
