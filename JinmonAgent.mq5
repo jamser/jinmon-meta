@@ -15,6 +15,7 @@
 //--- input parameters
 input long     order_magic = 55555;
 
+input double   additionLot=0;
 input double   slDelta=0;
 input double   orderLot=0;
 input int      pollingInterval=3;
@@ -96,7 +97,8 @@ void OnTimer()
             double stoploss = jv["sl"].ToDbl();
             const double lot = orderLot ? orderLot : jv["l"].ToDbl();
             const string action = jv["a"].ToStr();
-
+            const bool addition = jv["add"].ToBool();
+            
             MqlTick latest_price;
             SymbolInfoTick(_Symbol, latest_price);
 
@@ -125,6 +127,13 @@ void OnTimer()
                   Print(">> Sell " + lot + " at " + latest_price.bid + ", sl: " + stoploss);
                   Print("--------------------");
                  }
+               else if (addition)
+               {
+                  trade.Sell(additionLot, NULL, 0, stoploss);
+                  Print("--------------------");
+                  Print(">> Additional Sell " + additionLot + " at " + latest_price.bid + ", sl: " + stoploss);
+                  Print("--------------------");
+               }
                else
                  {
                   position.SelectByIndex(0);
@@ -148,6 +157,13 @@ void OnTimer()
                   Print(">> Buy " + lot + " at " + latest_price.ask + ", sl: " + stoploss);
                   Print("--------------------");
                  }
+               else if (addition) 
+               {
+                  trade.Buy(lot, NULL, 0, stoploss);
+                  Print("--------------------");
+                  Print(">> Additional Buy " + additionLot + " at " + latest_price.ask + ", sl: " + stoploss);
+                  Print("--------------------");               
+               }
                else
                  {
                   position.SelectByIndex(0);
