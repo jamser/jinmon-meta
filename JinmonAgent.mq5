@@ -98,7 +98,7 @@ void OnTimer()
             const double lot = orderLot ? orderLot : jv["l"].ToDbl();
             const string action = jv["a"].ToStr();
             const bool addition = jv["add"].ToBool();
-            
+
             MqlTick latest_price;
             SymbolInfoTick(_Symbol, latest_price);
 
@@ -127,25 +127,26 @@ void OnTimer()
                   Print(">> Sell " + lot + " at " + latest_price.bid + ", sl: " + stoploss);
                   Print("--------------------");
                  }
-               else if (addition)
-               {
-                  trade.Sell(additionLot, NULL, 0, stoploss);
-                  Print("--------------------");
-                  Print(">> Additional Sell " + additionLot + " at " + latest_price.bid + ", sl: " + stoploss);
-                  Print("--------------------");
-               }
                else
-                 {
-                  position.SelectByIndex(0);
-                  if(position.PositionType() == POSITION_TYPE_BUY)
+                  if(addition)
                     {
-                     CloseOrder();
+                     trade.Sell(additionLot, NULL, 0, stoploss);
                      Print("--------------------");
-                     Print(">> Close order");
+                     Print(">> Additional Sell " + additionLot + " at " + latest_price.bid + ", sl: " + stoploss);
                      Print("--------------------");
                     }
+                  else
+                    {
+                     position.SelectByIndex(0);
+                     if(position.PositionType() == POSITION_TYPE_BUY)
+                       {
+                        CloseOrder();
+                        Print("--------------------");
+                        Print(">> Close order");
+                        Print("--------------------");
+                       }
 
-                 }
+                    }
               }
 
             if(action == BUY_ORDER)
@@ -157,24 +158,25 @@ void OnTimer()
                   Print(">> Buy " + lot + " at " + latest_price.ask + ", sl: " + stoploss);
                   Print("--------------------");
                  }
-               else if (addition) 
-               {
-                  trade.Buy(lot, NULL, 0, stoploss);
-                  Print("--------------------");
-                  Print(">> Additional Buy " + additionLot + " at " + latest_price.ask + ", sl: " + stoploss);
-                  Print("--------------------");               
-               }
                else
-                 {
-                  position.SelectByIndex(0);
-                  if(position.PositionType() == POSITION_TYPE_SELL)
+                  if(addition)
                     {
-                     CloseOrder();
+                     trade.Buy(additionLot, NULL, 0, stoploss);
                      Print("--------------------");
-                     Print(">> Close order");
+                     Print(">> Additional Buy " + additionLot + " at " + latest_price.ask + ", sl: " + stoploss);
                      Print("--------------------");
                     }
-                 }
+                  else
+                    {
+                     position.SelectByIndex(0);
+                     if(position.PositionType() == POSITION_TYPE_SELL)
+                       {
+                        CloseOrder();
+                        Print("--------------------");
+                        Print(">> Close order");
+                        Print("--------------------");
+                       }
+                    }
               }
            }
         }
@@ -208,11 +210,12 @@ void OnChartEvent(const int id,
 //+------------------------------------------------------------------+
 bool CloseOrder()
   {
-   while(PositionsTotal() > 0)
+   int count = PositionsTotal();
+
+   for(int count = PositionsTotal(); count > 0; count --)
      {
-      if(position.SelectByIndex(0))
-         if(!trade.PositionClose(position.Ticket()))
-            return false;
+      if(position.SelectByIndex(count - 1))
+         !trade.PositionClose(position.Ticket());
      }
    return true;
   }
