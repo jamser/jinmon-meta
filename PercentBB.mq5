@@ -15,6 +15,7 @@
 #property indicator_color1  LightSeaGreen
 #property indicator_type2   DRAW_LINE
 #property indicator_color2  YellowGreen
+#property indicator_style2  STYLE_DASH
 #property indicator_label1  "Bands %B"
 #property indicator_label2  "Bands %S"
 
@@ -67,6 +68,15 @@ void OnInit()
    PlotIndexSetInteger(1,PLOT_DRAW_BEGIN,ExtBandsPeriod);
 //--- number of digits of indicator value
    IndicatorSetInteger(INDICATOR_DIGITS,3);
+   
+//--- Horizontal Lines of Oversell & Overbought
+   IndicatorSetInteger(INDICATOR_LEVELS, 2);
+   IndicatorSetDouble(INDICATOR_LEVELVALUE, 0, 0.5);
+   IndicatorSetDouble(INDICATOR_LEVELVALUE, 1, -0.5);
+   IndicatorSetInteger(INDICATOR_LEVELCOLOR, 0, clrDarkGray);
+   IndicatorSetInteger(INDICATOR_LEVELCOLOR, 1, clrDarkGray);
+   IndicatorSetInteger(INDICATOR_LEVELSTYLE, 0, STYLE_DOT);
+   IndicatorSetInteger(INDICATOR_LEVELSTYLE, 1, STYLE_DOT);
   }
 //+------------------------------------------------------------------+
 //| Bollinger Bands                                                  |
