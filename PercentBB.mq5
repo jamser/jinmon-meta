@@ -20,7 +20,7 @@
 #property indicator_label2  "Bands %S"
 
 //--- input parametrs
-input int     InpBandsPeriod=20;       // Period
+input int     InpBandsPeriod=60;       // Period
 input double  InpBandsDeviations=2.0;  // Deviation
 input bool    InpSqueezeAlert = false;
 input bool    InpBBAlert = false;
@@ -63,8 +63,8 @@ void OnInit()
 //--- define buffers
    SetIndexBuffer(0, ExtPercentBuffer);
    SetIndexBuffer(1, ExtSqueezeBuffer);
-   SetIndexBuffer(2,ExtMLBuffer, INDICATOR_CALCULATIONS);
-   SetIndexBuffer(3,ExtStdDevBuffer,INDICATOR_CALCULATIONS);
+   SetIndexBuffer(2, ExtMLBuffer, INDICATOR_CALCULATIONS);
+   SetIndexBuffer(3, ExtStdDevBuffer,INDICATOR_CALCULATIONS);
 //--- set index labels
    PlotIndexSetString(0,PLOT_LABEL, "%B("+string(ExtBandsPeriod)+")");
    PlotIndexSetString(1,PLOT_LABEL, "%S("+string(ExtBandsPeriod)+")");
@@ -165,6 +165,7 @@ int OnCalculate(const int rates_total,
          Alert("[BB Alert] Over BUY");
 
       fOverBuy = true;
+      PlotIndexSetInteger(0, PLOT_LINE_COLOR, 0, clrLightYellow);
      }
    if(fOverBuy && PercentB <= 0.45)
      {
@@ -174,6 +175,7 @@ int OnCalculate(const int rates_total,
          Alert("[BB Alert] O/B -> Normal");
 
       fOverBuy = false;
+      PlotIndexSetInteger(0, PLOT_LINE_COLOR, 0, clrLightSeaGreen);
      }
 
 //--- Over Sell
@@ -184,6 +186,7 @@ int OnCalculate(const int rates_total,
       if(InpBBAlert && !InpNotifyDevice)
          Alert("[BB Alert] Over SELL");
       fOverSell = true;
+      PlotIndexSetInteger(0, PLOT_LINE_COLOR, 0, clrLightYellow);
      }
    if(fOverSell && PercentB >= -0.45)
      {
@@ -193,6 +196,7 @@ int OnCalculate(const int rates_total,
          Alert("[BB Alert] O/S -> Normal");
 
       fOverSell = false;
+      PlotIndexSetInteger(0, PLOT_LINE_COLOR, 0, clrLightSeaGreen);
      }
 
    return(rates_total);
