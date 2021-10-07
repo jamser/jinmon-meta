@@ -22,6 +22,9 @@
 //--- input parametrs
 input int     InpBandsPeriod=20;       // Period
 input double  InpBandsDeviations=2.0;  // Deviation
+input bool    InpSqueezeAlert = false;
+input bool    InpBBAlert = false;
+input bool    InpNotifyDevice = true;
 //--- global variables
 int           ExtBandsPeriod;
 double        ExtBandsDeviations;
@@ -31,6 +34,11 @@ double        ExtPercentBuffer[];
 double        ExtSqueezeBuffer[];
 double        ExtMLBuffer[];
 double        ExtStdDevBuffer[];
+//--- alert flag
+bool          fSqueezeOver = false;
+bool          fSqueezeUnder = false;
+bool          fOverSell = false;
+bool          fOverBuy  = false;
 //+------------------------------------------------------------------+
 //| Custom indicator initialization function                         |
 //+------------------------------------------------------------------+
@@ -68,15 +76,18 @@ void OnInit()
    PlotIndexSetInteger(1,PLOT_DRAW_BEGIN,ExtBandsPeriod);
 //--- number of digits of indicator value
    IndicatorSetInteger(INDICATOR_DIGITS,3);
-   
+
 //--- Horizontal Lines of Oversell & Overbought
-   IndicatorSetInteger(INDICATOR_LEVELS, 2);
+   IndicatorSetInteger(INDICATOR_LEVELS, 3);
    IndicatorSetDouble(INDICATOR_LEVELVALUE, 0, 0.5);
    IndicatorSetDouble(INDICATOR_LEVELVALUE, 1, -0.5);
-   IndicatorSetInteger(INDICATOR_LEVELCOLOR, 0, clrDarkGray);
-   IndicatorSetInteger(INDICATOR_LEVELCOLOR, 1, clrDarkGray);
+   IndicatorSetDouble(INDICATOR_LEVELVALUE, 2, 0);
+   IndicatorSetInteger(INDICATOR_LEVELCOLOR, 0, clrGoldenrod);
+   IndicatorSetInteger(INDICATOR_LEVELCOLOR, 1, clrGoldenrod);
+   IndicatorSetInteger(INDICATOR_LEVELCOLOR, 2, clrLightBlue);
    IndicatorSetInteger(INDICATOR_LEVELSTYLE, 0, STYLE_DOT);
    IndicatorSetInteger(INDICATOR_LEVELSTYLE, 1, STYLE_DOT);
+   IndicatorSetInteger(INDICATOR_LEVELSTYLE, 2, STYLE_SOLID);
   }
 //+------------------------------------------------------------------+
 //| Bollinger Bands                                                  |
@@ -97,10 +108,10 @@ int OnCalculate(const int rates_total,
      }
 //--- starting calculation
    int pos;
-   if(prev_calculated>1)
-      pos=prev_calculated-1;
+   if(prev_calculated > 1)
+      pos = prev_calculated - 1;
    else
-      pos=0;
+      pos = 0;
 //--- main cycle
    double BandWidth = 0;
    for(int i=pos; i<rates_total && !IsStopped(); i++)
@@ -115,6 +126,75 @@ int OnCalculate(const int rates_total,
       ExtSqueezeBuffer[i] = BandWidth / ExtMLBuffer[i] * 100;
      }
 //--- OnCalculate done. Return new prev_calculated.
+
+//--- Bollinger Band Squeeze Alert.
+   double SqueezeRate = ExtSqueezeBuffer[rates_total - 1];
+
+   if(!fSqueezeOver && SqueezeRate >= 0.5)
+     {
+      if(InpSqueezeAlert && InpNotifyDevice)
+         SendNotification("[Squeeze] Volatile !!!");
+      if(InpSqueezeAlert && !InpNotifyDevice)
+         Alert("[Squeeze] Volatile !!!");
+
+      fSqueezeOver = true;
+      fSqueezeUnder = false;
+      PlotIndexSetInteger(1, PLOT_LINE_COLOR, 0, clrRed);
+     }
+   if(!fSqueezeUnder && SqueezeRate <= 0.45)
+     {
+      if(InpSqueezeAlert && InpNotifyDevice)
+         SendNotification("[Squeeze] Calm");
+      if(InpSqueezeAlert && !InpNotifyDevice)
+         Alert("[Squeeze] Calm");
+
+      fSqueezeOver = false;
+      fSqueezeUnder = true;
+      PlotIndexSetInteger(1, PLOT_LINE_COLOR, 0, clrYellowGreen);
+     }
+
+//--- Bollinger %B Over Sell / Buy Alerts.
+   double PercentB = ExtPercentBuffer[rates_total - 1];
+
+//--- Over Buy
+   if(!fOverBuy && PercentB >= 0.5)
+     {
+      if(InpBBAlert && InpNotifyDevice)
+         SendNotification("[BB Alert] Over BUY");
+      if(InpBBAlert && !InpNotifyDevice)
+         Alert("[BB Alert] Over BUY");
+
+      fOverBuy = true;
+     }
+   if(fOverBuy && PercentB <= 0.45)
+     {
+      if(InpBBAlert && InpNotifyDevice)
+         SendNotification("[BB Alert] O/B -> Normal");
+      if(InpBBAlert && !InpNotifyDevice)
+         Alert("[BB Alert] O/B -> Normal");
+
+      fOverBuy = false;
+     }
+
+//--- Over Sell
+   if(!fOverSell && PercentB <= -0.5)
+     {
+      if(InpBBAlert && InpNotifyDevice)
+         SendNotification("[BB Alert] Over SELL");
+      if(InpBBAlert && !InpNotifyDevice)
+         Alert("[BB Alert] Over SELL");
+      fOverSell = true;
+     }
+   if(fOverSell && PercentB >= -0.45)
+     {
+      if(InpBBAlert && InpNotifyDevice)
+         SendNotification("[BB Alert] O/S -> Normal");
+      if(InpBBAlert && !InpNotifyDevice)
+         Alert("[BB Alert] O/S -> Normal");
+
+      fOverSell = false;
+     }
+
    return(rates_total);
   }
 //+------------------------------------------------------------------+
