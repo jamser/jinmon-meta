@@ -11,70 +11,64 @@
 #include <MovingAverages.mqh>
 
 //--- input parameters
-input long     order_magic = 55555;
+input bool     InpVerbose=false;
+input bool     InpDryRun=false;
+input int      InpBackTrackBars = 96;
 
-input double   additionLot=0;
-input double   slDelta=0;
-input double   orderLot=0;
-input bool     verbose=false;
-input bool     dryRun=false;
+input bool     InpSendTick=false;
 input string   agentCallback = "http://127.0.0.1/";
 
-input int      obvFastMALength = 50;
-input int      obvSlowMALength = 150;
-
-input int      macdFast = 60;
-input int      macdSlow = 130;
-input int      macdSignal = 45;
-
-input int      bollMALength = 390;
+input int      bollMALength = 60;   // based on M5.
 
 //--- misc. variables
+string   HttpHeaders = "content-type: application/json\r\n";
 
-//--- OBV Indicator
-int obvHandle;
-double OBVBuffer[];
-double obvFastMABuffer[];
-double obvSlowMABuffer[];
+//--- A/D% Indicator
+int adpHandle;
 
-//--- MACD Indicator
-int macdHandle;
-double MACDBuffer[];
-double SignalBuffer[];
+double ADPercentBuffer[];
 
-//--- Bollinger Band Indicator
-int bollHandle;
+//--- Bollinger Band% Indicator
+int bollPercentHandle;
 
-double UpperBuffer[];
-double LowerBuffer[];
-double BaseBuffer[];
+double BBPercentBuffer[];
+double SqueezeRateBuffer[];
+double MiddleLineBuffer[];
 
 //+------------------------------------------------------------------+
 //| Expert initialization function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
   {
-//---
-   obvHandle = iOBV(_Symbol, PERIOD_M5, VOLUME_TICK);
-   if(obvHandle == INVALID_HANDLE)
-     {
-      PrintFormat("Failed to create handle of the iOBV indicator for the symbol, code %d", GetLastError());
-      return (INIT_FAILED);
-     }
+//--- Bollinger Band Indicator
+   /*
+      bollingerHandle = iBands(_Symbol, PERIOD_M1, bollMALength, 0, 2, PRICE_CLOSE);
+      if(bollingerHandle == INVALID_HANDLE)
+        {
+         PrintFormat("Failed to create handle of the iBands indicator for the symbol, code %d", GetLastError());
+         return (INVALID_HANDLE);
+        }
+   */
 
-   macdHandle = iMACD(_Symbol, PERIOD_M1, macdFast, macdSlow, macdSignal, PRICE_CLOSE);
-   if(macdHandle == INVALID_HANDLE)
+//--- Bollinger Band% Indicator
+   bollPercentHandle = iCustom(_Symbol, PERIOD_M5, "PercentBB");
+   if(bollPercentHandle == INVALID_HANDLE)
      {
-      PrintFormat("Failed to create handle of the iMACD indicator for the symbol, code %d", GetLastError());
-      return (INIT_FAILED);
-     }
-
-   bollHandle = iBands(_Symbol, PERIOD_M1, bollMALength, 0, 2, PRICE_CLOSE);
-   if(bollHandle == INVALID_HANDLE)
-     {
-      PrintFormat("Failed to create handle of the iBands indicator for the symbol, code %d", GetLastError());
+      PrintFormat("Failed to create handle of the BB% indicator for the symbol, code %d", GetLastError());
       return (INVALID_HANDLE);
      }
+   ArraySetAsSeries(BBPercentBuffer, true);
+   ArraySetAsSeries(SqueezeRateBuffer, true);
+   ArraySetAsSeries(MiddleLineBuffer, true);
+
+//--- Accumlation / Distribution % Indicator
+   adpHandle = iCustom(_Symbol, PERIOD_M5, "PercentAD");
+   if(adpHandle == INVALID_HANDLE)
+     {
+      PrintFormat("Failed to create handle of the A/D% indicator for the symbol, code %d", GetLastError());
+      return (INVALID_HANDLE);
+     }
+   ArraySetAsSeries(ADPercentBuffer, true);
 
    return(INIT_SUCCEEDED);
   }
@@ -99,42 +93,56 @@ double CalibrateOHLC(double p)
 void OnTick()
   {
 //---
-   string cookie = NULL, headers;
+   string resultHeaders;
    char post[], result[];
 
 //--- Calculate OHLC features.
-   double open = CalibrateOHLC(iOpen(_Symbol, PERIOD_M5, 1));
-   double high = CalibrateOHLC(iHigh(_Symbol, PERIOD_M5, 1)) - open;
-   double low  = CalibrateOHLC(iLow(_Symbol, PERIOD_M5, 1)) - open;
-   double close= CalibrateOHLC(iClose(_Symbol, PERIOD_M5, 1)) - open;
+   double open = iOpen(_Symbol, PERIOD_M5, 1);
+   double high = iHigh(_Symbol, PERIOD_M5, 1);
+   double low  = iLow(_Symbol, PERIOD_M5, 1);
+   double close= iClose(_Symbol, PERIOD_M5, 1);
 
-//--- Calculate OBV features.
-   if(CopyBuffer(obvHandle, 0, 1, obvSlowMALength * 2, OBVBuffer) < 0)
-     {
-      //--- if the copying fails, tell the error code
-      PrintFormat("Failed to copy data from the iOBV indicator, error code %d",GetLastError());
-      return ;
-     }
+//--- Retrieve A/D% Indicator Data
+   CopyBuffer(adpHandle, 0, 0, InpBackTrackBars, ADPercentBuffer);
 
-   ExponentialMAOnBuffer(rates_total, prev_calculated, 0, obvFastMALength, OBVBuffer, obvFastMABuffer);
-   ExponentialMAOnBuffer(rates_total, prev_calculated, 0, obvSlowMALength, OBVBuffer, obvSlowMABuffer);
+//--- Retrieve BB% Indicator Data
+   CopyBuffer(bollPercentHandle, 0, 0, InpBackTrackBars, BBPercentBuffer);
+   CopyBuffer(bollPercentHandle, 1, 0, InpBackTrackBars, SqueezeRateBuffer);
+   CopyBuffer(bollPercentHandle, 2, 0, InpBackTrackBars, MiddleLineBuffer);
 
-//--- Calculate MACD features.
-   CopyBuffer(macdHandle, 0, 0, 1, MACDBuffer);
-   CopyBuffer(macdHandle, 1, 0, 1, SignalBuffer);
-   double macd = MACDBuffer[0];
-   double signal = SignalBuffer[0];
-   
-//--- Calculate Bollinger Band features.
-   CopyBuffer(bollHandle, 0, 0, 1, BaseBuffer);
-   CopyBuffer(bollHandle, 1, 0, 1, UpperBuffer);
-   CopyBuffer(bollHandle, 2, 0, 1, LowerBuffer);
-   double base = CalibrateOHLC(BaseBuffer[0]);
-   double upper = CalibrateOHLC(UpperBuffer[0]) - close;
-   double lower = close - CalibrateOHLC(LowerBuffer[0]);
-   
+//--- Latest Price.
+   MqlTick latest_price;
+   SymbolInfoTick(_Symbol, latest_price);
+
+//--- Convert to JSON format.
+   string jsonString = "{" +
+//--- OHCL
+                       "\"o\":" + open   + "," +
+                       "\"h\":" + high   + "," +
+                       "\"c\":" + close  + "," +
+                       "\"l\":" + low    + "," +
+//--- latest price
+                       "\"lp\":" + latest_price.last + "," +
+                       "\"dt\":" + (uint)latest_price.time + "," +
+//--- BB% + S%
+                       "\"bp\":" + BBPercentBuffer[0]     + "," +
+                       "\"sr\":" + SqueezeRateBuffer[0]   + "," +
+//--- A/D%
+                       "\"adp\":" + ADPercentBuffer[0]    +
+                       "}";
+
 //--- Post to databank server.
-   int res = WebRequest("POST", agentCallback + "mt/tick/", cookie, NULL, 500, post, 0, result, headers);
+
+   if(!InpSendTick)
+      return ;
+
+//--- 字串最後以 0 結尾，會導致 JSON.parse() 失敗。
+//--- 因此要指定字串長度，避免最後面的 null character 也存入陣列。
+   StringToCharArray(jsonString, post, 0, StringLen(jsonString));
+   if(InpVerbose)
+      Print("JSON: " + jsonString);
+
+   int res = WebRequest("POST", agentCallback + "mt/tick/", HttpHeaders, 500, post, result, resultHeaders);
    if(res==-1)
      {
       Print("Error in WebRequest. Error code  =",GetLastError());
@@ -148,24 +156,21 @@ void OnTick()
         {
          if(ArraySize(result) == 2)
            {
-            if(verbose)
-               Print("NA");
+            if(InpVerbose)
+               Print(CharArrayToString(result));
            }
          else
            {
             CJAVal jv;
             jv.Deserialize(result);
 
-            double stoploss = jv["sl"].ToDbl();
-            const double lot = orderLot ? orderLot : jv["l"].ToDbl();
-            const string action = jv["a"].ToStr();
-            const bool addition = jv["add"].ToBool();
-
-            MqlTick latest_price;
-            SymbolInfoTick(_Symbol, latest_price);
+            //double stoploss = jv["sl"].ToDbl();
+            //const double lot = orderLot ? orderLot : jv["l"].ToDbl();
+            //const string action = jv["a"].ToStr();
+            //const bool addition = jv["add"].ToBool();
 
             // Dry-Run only for debugging.
-            if(dryRun)
+            if(InpDryRun)
                return ;
            }
         }
@@ -174,4 +179,21 @@ void OnTick()
      }
   }
 
+//+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//| URL Encoder function                                             |
+//+------------------------------------------------------------------+
+string urlEncode(string value)
+  {
+   int len = StringLen(value);
+   string encodedValue = "";
+   uchar characters[];
+   StringToCharArray(value,characters);
+   for(int i = 0; i<len ; i++)
+     {
+      encodedValue += StringFormat("%%%02x", characters[i]);
+     }
+   return encodedValue;
+  }
 //+------------------------------------------------------------------+
