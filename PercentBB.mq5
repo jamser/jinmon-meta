@@ -25,6 +25,8 @@ input double  InpBandsDeviations=2.0;  // Deviation
 input bool    InpSqueezeAlert = false;
 input bool    InpBBAlert = false;
 input bool    InpNotifyDevice = true;
+input string  InpAlertPrefix = "M5";
+
 //--- global variables
 int           ExtBandsPeriod;
 double        ExtBandsDeviations;
@@ -35,8 +37,8 @@ double        ExtSqueezeBuffer[];
 double        ExtMLBuffer[];
 double        ExtStdDevBuffer[];
 //--- alert flag
-bool          fSqueezeOver = false;
-bool          fSqueezeUnder = false;
+bool          fBBSqueezed = false;
+bool          fBBExpansion = false;
 bool          fOverSell = false;
 bool          fOverBuy  = false;
 //+------------------------------------------------------------------+
@@ -130,29 +132,57 @@ int OnCalculate(const int rates_total,
 //--- Bollinger Band Squeeze Alert.
    double SqueezeRate = ExtSqueezeBuffer[rates_total - 1];
 
-   if(!fSqueezeOver && SqueezeRate >= 0.5)
+   string message;
+   
+   //--- BB Expansion.
+   if(!fBBExpansion && SqueezeRate >= 0.5)
      {
+      message = "[SR " + InpAlertPrefix + "] Volatile! " + SqueezeRate;
       if(InpSqueezeAlert && InpNotifyDevice)
-         SendNotification("[Squeeze] Volatile !!!");
+         SendNotification(message);
       if(InpSqueezeAlert && !InpNotifyDevice)
-         Alert("[Squeeze] Volatile !!!");
+         Alert(message);
 
-      fSqueezeOver = true;
-      fSqueezeUnder = false;
+      fBBExpansion = true;
       PlotIndexSetInteger(1, PLOT_LINE_COLOR, 0, clrRed);
      }
-   if(!fSqueezeUnder && SqueezeRate <= 0.45)
+   if(fBBExpansion && SqueezeRate <= 0.45)
      {
+      message = "[SR " + InpAlertPrefix + "] Calm. " + SqueezeRate;
       if(InpSqueezeAlert && InpNotifyDevice)
-         SendNotification("[Squeeze] Calm");
+         SendNotification(message);
       if(InpSqueezeAlert && !InpNotifyDevice)
-         Alert("[Squeeze] Calm");
+         Alert(message);
 
-      fSqueezeOver = false;
-      fSqueezeUnder = true;
+      fBBExpansion = false;
       PlotIndexSetInteger(1, PLOT_LINE_COLOR, 0, clrYellowGreen);
      }
 
+   //--- BB Squeezed
+   if (!fBBSqueezed && SqueezeRate <= 0.085)
+    {
+      message = "[SR " + InpAlertPrefix + "] Squeezed! " + SqueezeRate;
+      if(InpSqueezeAlert && InpNotifyDevice)
+         SendNotification(message);
+      if(InpSqueezeAlert && !InpNotifyDevice)
+         Alert(message);
+
+      fBBSqueezed = true;
+      PlotIndexSetInteger(1, PLOT_LINE_COLOR, 0, clrWhite);      
+    }
+   if (fBBSqueezed && SqueezeRate >= 0.1)
+    {
+      message = "[SR " + InpAlertPrefix + "] Calm. " + SqueezeRate;
+      if(InpSqueezeAlert && InpNotifyDevice)
+         SendNotification(message);
+      if(InpSqueezeAlert && !InpNotifyDevice)
+         Alert(message);
+
+      fBBSqueezed = false;
+      PlotIndexSetInteger(1, PLOT_LINE_COLOR, 0, clrYellowGreen);      
+    }
+
+    
 //--- Bollinger %B Over Sell / Buy Alerts.
    double PercentB = ExtPercentBuffer[rates_total - 1];
 
@@ -160,7 +190,7 @@ int OnCalculate(const int rates_total,
    if(!fOverBuy && PercentB >= 0.5)
      {
       if(InpBBAlert && InpNotifyDevice)
-         SendNotification("[BB Alert] Over BUY");
+         SendNotification("[BB " + InpAlertPrefix + "] Over BUY");
       if(InpBBAlert && !InpNotifyDevice)
          Alert("[BB Alert] Over BUY");
 
@@ -170,7 +200,7 @@ int OnCalculate(const int rates_total,
    if(fOverBuy && PercentB <= 0.45)
      {
       if(InpBBAlert && InpNotifyDevice)
-         SendNotification("[BB Alert] O/B -> Normal");
+         SendNotification("[BB " + InpAlertPrefix + "] O/B -> Normal");
       if(InpBBAlert && !InpNotifyDevice)
          Alert("[BB Alert] O/B -> Normal");
 
@@ -182,7 +212,7 @@ int OnCalculate(const int rates_total,
    if(!fOverSell && PercentB <= -0.5)
      {
       if(InpBBAlert && InpNotifyDevice)
-         SendNotification("[BB Alert] Over SELL");
+         SendNotification("[BB " + InpAlertPrefix + "] Over SELL");
       if(InpBBAlert && !InpNotifyDevice)
          Alert("[BB Alert] Over SELL");
       fOverSell = true;
@@ -191,7 +221,7 @@ int OnCalculate(const int rates_total,
    if(fOverSell && PercentB >= -0.45)
      {
       if(InpBBAlert && InpNotifyDevice)
-         SendNotification("[BB Alert] O/S -> Normal");
+         SendNotification("[BB " + InpAlertPrefix + "] O/S -> Normal");
       if(InpBBAlert && !InpNotifyDevice)
          Alert("[BB Alert] O/S -> Normal");
 
