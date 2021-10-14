@@ -9,38 +9,45 @@
 #include <MovingAverages.mqh>
 //---
 #property indicator_separate_window
-#property indicator_buffers 4
+#property indicator_buffers 6
 #property indicator_plots   2
-#property indicator_type1   DRAW_LINE
-#property indicator_color1  LightSeaGreen
-#property indicator_type2   DRAW_LINE
-#property indicator_color2  YellowGreen
+#property indicator_type1   DRAW_COLOR_LINE
+#property indicator_color1  LightSkyBlue, DeepPink
+#property indicator_type2   DRAW_COLOR_LINE
+#property indicator_color2  YellowGreen, White, Red
 #property indicator_style2  STYLE_DASH
 #property indicator_label1  "Bands %B"
 #property indicator_label2  "Bands %S"
 
+color bbpColors[] = {clrLightSkyBlue, clrDeepPink};
+color srColors[] = {clrYellowGreen, clrWhite, clrRed};
+
 //--- input parametrs
-input int     InpBandsPeriod=60;       // Period
-input double  InpBandsDeviations=2.0;  // Deviation
-input bool    InpSqueezeAlert = false;
-input bool    InpBBAlert = false;
-input bool    InpNotifyDevice = true;
-input string  InpAlertPrefix = "M5";
+input int      InpBandsPeriod=60;       // Period
+input double   InpBandsDeviations=2.0;  // Deviation
+input bool     InpSqueezeAlert = false;
+input bool     InpBBAlert = false;
+input bool     InpNotifyDevice = true;
+input string   InpAlertPrefix = "M5";
 
 //--- global variables
-int           ExtBandsPeriod;
-double        ExtBandsDeviations;
-int           ExtPlotBegin=0;
+int            ExtBandsPeriod;
+double         ExtBandsDeviations;
+int            ExtPlotBegin=0;
 //--- indicator buffer
-double        ExtPercentBuffer[];
-double        ExtSqueezeBuffer[];
-double        ExtMLBuffer[];
-double        ExtStdDevBuffer[];
+double         ExtPercentBuffer[];
+double         bbpColorBuffer[];
+
+double         ExtSqueezeBuffer[];
+double         srColorBuffer[];
+
+double         ExtMLBuffer[];
+double         ExtStdDevBuffer[];
 //--- alert flag
-bool          fBBSqueezed = false;
-bool          fBBExpansion = false;
-bool          fOverSell = false;
-bool          fOverBuy  = false;
+bool           fBBSqueezed = false;
+bool           fBBExpansion = false;
+bool           fOverSell = false;
+bool           fOverBuy  = false;
 //+------------------------------------------------------------------+
 //| Custom indicator initialization function                         |
 //+------------------------------------------------------------------+
@@ -64,9 +71,12 @@ void OnInit()
       ExtBandsDeviations=InpBandsDeviations;
 //--- define buffers
    SetIndexBuffer(0, ExtPercentBuffer);
-   SetIndexBuffer(1, ExtSqueezeBuffer);
-   SetIndexBuffer(2, ExtMLBuffer, INDICATOR_CALCULATIONS);
-   SetIndexBuffer(3, ExtStdDevBuffer,INDICATOR_CALCULATIONS);
+   SetIndexBuffer(1, bbpColorBuffer, INDICATOR_COLOR_INDEX);
+   SetIndexBuffer(2, ExtSqueezeBuffer);
+   SetIndexBuffer(3, srColorBuffer, INDICATOR_COLOR_INDEX);
+   SetIndexBuffer(4, ExtMLBuffer, INDICATOR_CALCULATIONS);
+   SetIndexBuffer(5, ExtStdDevBuffer,INDICATOR_CALCULATIONS);
+
 //--- set index labels
    PlotIndexSetString(0,PLOT_LABEL, "%B("+string(ExtBandsPeriod)+")");
    PlotIndexSetString(1,PLOT_LABEL, "%S("+string(ExtBandsPeriod)+")");
@@ -90,6 +100,15 @@ void OnInit()
    IndicatorSetInteger(INDICATOR_LEVELSTYLE, 0, STYLE_DOT);
    IndicatorSetInteger(INDICATOR_LEVELSTYLE, 1, STYLE_DOT);
    IndicatorSetInteger(INDICATOR_LEVELSTYLE, 2, STYLE_SOLID);
+
+//--- Setup Level Lines
+   IndicatorSetInteger(INDICATOR_LEVELS, 2);
+   //IndicatorSetInteger(INDICATOR_LEVELCOLOR, 0, clrPink);
+   //IndicatorSetInteger(INDICATOR_LEVELSTYLE, 0, STYLE_SOLID);
+
+//--- Setup Colors for Plot
+   //ChangeColors(0, bbpColors, ArraySize(bbpColors));
+   //ChangeColors(1, srColors, ArraySize(srColors));
   }
 //+------------------------------------------------------------------+
 //| Bollinger Bands                                                  |
@@ -126,6 +145,10 @@ int OnCalculate(const int rates_total,
       BandWidth = ExtStdDevBuffer[i] * ExtBandsDeviations * 2;
       ExtPercentBuffer[i] = (price[i] - ExtMLBuffer[i]) / BandWidth;
       ExtSqueezeBuffer[i] = BandWidth / ExtMLBuffer[i] * 100;
+      
+      //--- coloring plots.
+      bbpColorBuffer[i] = (MathAbs(ExtPercentBuffer[i]) >= 0.5 ? 1 : 0);
+      srColorBuffer[i] = (ExtSqueezeBuffer[i] > 0.5 ? 1 : (ExtSqueezeBuffer[i] <= 0.1 ? 2 : 0));
      }
 //--- OnCalculate done. Return new prev_calculated.
 
@@ -133,8 +156,9 @@ int OnCalculate(const int rates_total,
    double SqueezeRate = ExtSqueezeBuffer[rates_total - 1];
 
    string message;
+   pos = rates_total - 1;
    
-   //--- BB Expansion.
+//--- BB Expansion.
    if(!fBBExpansion && SqueezeRate >= 0.5)
      {
       message = "[SR " + InpAlertPrefix + "] Volatile! " + SqueezeRate;
@@ -144,23 +168,21 @@ int OnCalculate(const int rates_total,
          Alert(message);
 
       fBBExpansion = true;
-      PlotIndexSetInteger(1, PLOT_LINE_COLOR, 0, clrRed);
      }
    if(fBBExpansion && SqueezeRate <= 0.45)
      {
-      message = "[SR " + InpAlertPrefix + "] Calm. " + SqueezeRate;
+      message = "[SR " + InpAlertPrefix + "] Volatile -> Calm. " + SqueezeRate;
       if(InpSqueezeAlert && InpNotifyDevice)
          SendNotification(message);
       if(InpSqueezeAlert && !InpNotifyDevice)
          Alert(message);
 
       fBBExpansion = false;
-      PlotIndexSetInteger(1, PLOT_LINE_COLOR, 0, clrYellowGreen);
      }
 
-   //--- BB Squeezed
-   if (!fBBSqueezed && SqueezeRate <= 0.085)
-    {
+//--- BB Squeezed
+   if(!fBBSqueezed && SqueezeRate <= 0.1)
+     {
       message = "[SR " + InpAlertPrefix + "] Squeezed! " + SqueezeRate;
       if(InpSqueezeAlert && InpNotifyDevice)
          SendNotification(message);
@@ -168,21 +190,19 @@ int OnCalculate(const int rates_total,
          Alert(message);
 
       fBBSqueezed = true;
-      PlotIndexSetInteger(1, PLOT_LINE_COLOR, 0, clrWhite);      
-    }
-   if (fBBSqueezed && SqueezeRate >= 0.1)
-    {
-      message = "[SR " + InpAlertPrefix + "] Calm. " + SqueezeRate;
+     }
+   if(fBBSqueezed && SqueezeRate >= 0.12)
+     {
+      message = "[SR " + InpAlertPrefix + "] Squeezed -> Calm. " + SqueezeRate;
       if(InpSqueezeAlert && InpNotifyDevice)
          SendNotification(message);
       if(InpSqueezeAlert && !InpNotifyDevice)
          Alert(message);
 
       fBBSqueezed = false;
-      PlotIndexSetInteger(1, PLOT_LINE_COLOR, 0, clrYellowGreen);      
-    }
+     }
 
-    
+
 //--- Bollinger %B Over Sell / Buy Alerts.
    double PercentB = ExtPercentBuffer[rates_total - 1];
 
@@ -195,7 +215,6 @@ int OnCalculate(const int rates_total,
          Alert("[BB Alert] Over BUY");
 
       fOverBuy = true;
-      PlotIndexSetInteger(0, PLOT_LINE_COLOR, 0, clrLightYellow);
      }
    if(fOverBuy && PercentB <= 0.45)
      {
@@ -205,7 +224,6 @@ int OnCalculate(const int rates_total,
          Alert("[BB Alert] O/B -> Normal");
 
       fOverBuy = false;
-      PlotIndexSetInteger(0, PLOT_LINE_COLOR, 0, clrLightSeaGreen);
      }
 
 //--- Over Sell
@@ -216,7 +234,6 @@ int OnCalculate(const int rates_total,
       if(InpBBAlert && !InpNotifyDevice)
          Alert("[BB Alert] Over SELL");
       fOverSell = true;
-      PlotIndexSetInteger(0, PLOT_LINE_COLOR, 0, clrLightYellow);
      }
    if(fOverSell && PercentB >= -0.45)
      {
@@ -226,9 +243,10 @@ int OnCalculate(const int rates_total,
          Alert("[BB Alert] O/S -> Normal");
 
       fOverSell = false;
-      PlotIndexSetInteger(0, PLOT_LINE_COLOR, 0, clrLightSeaGreen);
      }
 
+   IndicatorSetDouble(INDICATOR_LEVELVALUE, 0, PercentB);
+   IndicatorSetDouble(INDICATOR_LEVELVALUE, 1, SqueezeRate);
    return(rates_total);
   }
 //+------------------------------------------------------------------+
@@ -246,5 +264,15 @@ double StdDev_Func(const int position,const double &price[],const double &ma_pri
      }
 //--- return calculated value
    return(std_dev);
+  }
+//+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+void  ChangeColors(int plot_id, color &cols[], int plot_colors)
+  {
+   for(int i = 0; i < plot_colors; i ++)
+      PlotIndexSetInteger(plot_id, PLOT_LINE_COLOR, i, cols[i]);
   }
 //+------------------------------------------------------------------+
