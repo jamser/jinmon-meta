@@ -51,7 +51,7 @@ void OnInit()
 //--- set index label
    PlotIndexSetString(0,PLOT_LABEL, "A/D%("+string(ExtPeriod)+")");
 //--- Horizontal Line
-   IndicatorSetInteger(INDICATOR_LEVELS, 1);
+   IndicatorSetInteger(INDICATOR_LEVELS, 2);
    IndicatorSetDouble(INDICATOR_LEVELVALUE, 0, 0);
    IndicatorSetInteger(INDICATOR_LEVELCOLOR, 0, clrPink);
    IndicatorSetInteger(INDICATOR_LEVELSTYLE, 0, STYLE_SOLID);
@@ -113,6 +113,7 @@ int OnCalculate(const int rates_total,
         }
      }
 //--- OnCalculate done. Return new prev_calculated.
+   IndicatorSetDouble(INDICATOR_LEVELVALUE, 1, ExtPercentBuffer[rates_total - 1]);
    return(rates_total);
   }
 //+------------------------------------------------------------------+
