@@ -42,12 +42,16 @@ double         ExtSqueezeBuffer[];
 double         srColorBuffer[];
 
 double         ExtMLBuffer[];
-double         ExtStdDevBuffer[];
+double         ExtUpperBuffer[];
 //--- alert flag
 bool           fBBSqueezed = false;
 bool           fBBExpansion = false;
 bool           fOverSell = false;
 bool           fOverBuy  = false;
+
+//--- Bollinger Band Index
+int            bbHandle;
+
 //+------------------------------------------------------------------+
 //| Custom indicator initialization function                         |
 //+------------------------------------------------------------------+
@@ -69,13 +73,16 @@ void OnInit()
      }
    else
       ExtBandsDeviations=InpBandsDeviations;
+
+   bbHandle = iBands(_Symbol, 0, ExtBandsPeriod, 0, ExtBandsDeviations, PRICE_CLOSE);
+
 //--- define buffers
    SetIndexBuffer(0, ExtPercentBuffer);
    SetIndexBuffer(1, bbpColorBuffer, INDICATOR_COLOR_INDEX);
    SetIndexBuffer(2, ExtSqueezeBuffer);
    SetIndexBuffer(3, srColorBuffer, INDICATOR_COLOR_INDEX);
    SetIndexBuffer(4, ExtMLBuffer, INDICATOR_CALCULATIONS);
-   SetIndexBuffer(5, ExtStdDevBuffer,INDICATOR_CALCULATIONS);
+   SetIndexBuffer(5, ExtUpperBuffer,INDICATOR_CALCULATIONS);
 
 //--- set index labels
    PlotIndexSetString(0,PLOT_LABEL, "%B("+string(ExtBandsPeriod)+")");
@@ -90,7 +97,7 @@ void OnInit()
    IndicatorSetInteger(INDICATOR_DIGITS,3);
 
 //--- Horizontal Lines of Oversell & Overbought
-   IndicatorSetInteger(INDICATOR_LEVELS, 3);
+   IndicatorSetInteger(INDICATOR_LEVELS, 5);
    IndicatorSetDouble(INDICATOR_LEVELVALUE, 0, 0.5);
    IndicatorSetDouble(INDICATOR_LEVELVALUE, 1, -0.5);
    IndicatorSetDouble(INDICATOR_LEVELVALUE, 2, 0);
@@ -101,14 +108,9 @@ void OnInit()
    IndicatorSetInteger(INDICATOR_LEVELSTYLE, 1, STYLE_DOT);
    IndicatorSetInteger(INDICATOR_LEVELSTYLE, 2, STYLE_SOLID);
 
-//--- Setup Level Lines
-   IndicatorSetInteger(INDICATOR_LEVELS, 2);
-   //IndicatorSetInteger(INDICATOR_LEVELCOLOR, 0, clrPink);
-   //IndicatorSetInteger(INDICATOR_LEVELSTYLE, 0, STYLE_SOLID);
-
 //--- Setup Colors for Plot
-   //ChangeColors(0, bbpColors, ArraySize(bbpColors));
-   //ChangeColors(1, srColors, ArraySize(srColors));
+//ChangeColors(0, bbpColors, ArraySize(bbpColors));
+//ChangeColors(1, srColors, ArraySize(srColors));
   }
 //+------------------------------------------------------------------+
 //| Bollinger Bands                                                  |
@@ -127,6 +129,19 @@ int OnCalculate(const int rates_total,
       PlotIndexSetInteger(0,PLOT_DRAW_BEGIN,ExtPlotBegin);
       PlotIndexSetInteger(1,PLOT_DRAW_BEGIN,ExtPlotBegin);
      }
+//--- Copy Bollinger Band Index from iBands
+   int to_copy;
+   if(prev_calculated>rates_total || prev_calculated<0)
+      to_copy=rates_total;
+   else
+     {
+      to_copy = rates_total - prev_calculated;
+      if(prev_calculated > 0)
+         to_copy++;
+     }
+   CopyBuffer(bbHandle, 0, 0, to_copy, ExtMLBuffer);
+   CopyBuffer(bbHandle, 1, 0, to_copy, ExtUpperBuffer);
+
 //--- starting calculation
    int pos;
    if(prev_calculated > 1)
@@ -137,15 +152,11 @@ int OnCalculate(const int rates_total,
    double BandWidth = 0;
    for(int i=pos; i<rates_total && !IsStopped(); i++)
      {
-      //--- middle line
-      ExtMLBuffer[i]=SimpleMA(i,ExtBandsPeriod,price);
-      //--- calculate and write down StdDev
-      ExtStdDevBuffer[i]=StdDev_Func(i,price,ExtMLBuffer,ExtBandsPeriod);
       //--- calculate percentage.
-      BandWidth = ExtStdDevBuffer[i] * ExtBandsDeviations * 2;
+      BandWidth =(ExtUpperBuffer[i] - ExtMLBuffer[i]) * 2;
       ExtPercentBuffer[i] = (price[i] - ExtMLBuffer[i]) / BandWidth;
       ExtSqueezeBuffer[i] = BandWidth / ExtMLBuffer[i] * 100;
-      
+
       //--- coloring plots.
       bbpColorBuffer[i] = (MathAbs(ExtPercentBuffer[i]) >= 0.5 ? 1 : 0);
       srColorBuffer[i] = (ExtSqueezeBuffer[i] > 0.5 ? 1 : (ExtSqueezeBuffer[i] <= 0.1 ? 2 : 0));
@@ -157,7 +168,7 @@ int OnCalculate(const int rates_total,
 
    string message;
    pos = rates_total - 1;
-   
+
 //--- BB Expansion.
    if(!fBBExpansion && SqueezeRate >= 0.5)
      {
@@ -245,27 +256,10 @@ int OnCalculate(const int rates_total,
       fOverSell = false;
      }
 
-   IndicatorSetDouble(INDICATOR_LEVELVALUE, 0, PercentB);
-   IndicatorSetDouble(INDICATOR_LEVELVALUE, 1, SqueezeRate);
+   IndicatorSetDouble(INDICATOR_LEVELVALUE, 3, PercentB);
+   IndicatorSetDouble(INDICATOR_LEVELVALUE, 4, SqueezeRate);
    return(rates_total);
   }
-//+------------------------------------------------------------------+
-//| Calculate Standard Deviation                                     |
-//+------------------------------------------------------------------+
-double StdDev_Func(const int position,const double &price[],const double &ma_price[],const int period)
-  {
-   double std_dev=0.0;
-//--- calcualte StdDev
-   if(position>=period)
-     {
-      for(int i=0; i<period; i++)
-         std_dev+=MathPow(price[position-i]-ma_price[position],2.0);
-      std_dev=MathSqrt(std_dev/period);
-     }
-//--- return calculated value
-   return(std_dev);
-  }
-//+------------------------------------------------------------------+
 
 //+------------------------------------------------------------------+
 //|                                                                  |
