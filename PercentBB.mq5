@@ -28,7 +28,6 @@ input double   InpBandsDeviations=2.0;  // Deviation
 input bool     InpSqueezeAlert = false;
 input bool     InpBBAlert = false;
 input bool     InpNotifyDevice = true;
-input string   InpAlertPrefix = "M5";
 
 //--- global variables
 int            ExtBandsPeriod;
@@ -172,7 +171,7 @@ int OnCalculate(const int rates_total,
 //--- BB Expansion.
    if(!fBBExpansion && SqueezeRate >= 0.5)
      {
-      message = "[SR " + InpAlertPrefix + "] Volatile! " + SqueezeRate;
+      message = "[SR " + AlertPrefix() + "] Volatile! " + SqueezeRate;
       if(InpSqueezeAlert && InpNotifyDevice)
          SendNotification(message);
       if(InpSqueezeAlert && !InpNotifyDevice)
@@ -182,7 +181,7 @@ int OnCalculate(const int rates_total,
      }
    if(fBBExpansion && SqueezeRate <= 0.45)
      {
-      message = "[SR " + InpAlertPrefix + "] Volatile -> Calm. " + SqueezeRate;
+      message = "[SR " + AlertPrefix() + "] Volatile -> Calm. " + SqueezeRate;
       if(InpSqueezeAlert && InpNotifyDevice)
          SendNotification(message);
       if(InpSqueezeAlert && !InpNotifyDevice)
@@ -194,7 +193,7 @@ int OnCalculate(const int rates_total,
 //--- BB Squeezed
    if(!fBBSqueezed && SqueezeRate <= 0.1)
      {
-      message = "[SR " + InpAlertPrefix + "] Squeezed! " + SqueezeRate;
+      message = "[SR " + AlertPrefix() + "] Squeezed! " + SqueezeRate;
       if(InpSqueezeAlert && InpNotifyDevice)
          SendNotification(message);
       if(InpSqueezeAlert && !InpNotifyDevice)
@@ -204,7 +203,7 @@ int OnCalculate(const int rates_total,
      }
    if(fBBSqueezed && SqueezeRate >= 0.12)
      {
-      message = "[SR " + InpAlertPrefix + "] Squeezed -> Calm. " + SqueezeRate;
+      message = "[SR " + AlertPrefix() + "] Squeezed -> Calm. " + SqueezeRate;
       if(InpSqueezeAlert && InpNotifyDevice)
          SendNotification(message);
       if(InpSqueezeAlert && !InpNotifyDevice)
@@ -221,7 +220,7 @@ int OnCalculate(const int rates_total,
    if(!fOverBuy && PercentB >= 0.5)
      {
       if(InpBBAlert && InpNotifyDevice)
-         SendNotification("[BB " + InpAlertPrefix + "] Over BUY");
+         SendNotification("[BB " + AlertPrefix() + "] Over BUY");
       if(InpBBAlert && !InpNotifyDevice)
          Alert("[BB Alert] Over BUY");
 
@@ -230,7 +229,7 @@ int OnCalculate(const int rates_total,
    if(fOverBuy && PercentB <= 0.45)
      {
       if(InpBBAlert && InpNotifyDevice)
-         SendNotification("[BB " + InpAlertPrefix + "] O/B -> Normal");
+         SendNotification("[BB " + AlertPrefix() + "] O/B -> Normal");
       if(InpBBAlert && !InpNotifyDevice)
          Alert("[BB Alert] O/B -> Normal");
 
@@ -241,7 +240,7 @@ int OnCalculate(const int rates_total,
    if(!fOverSell && PercentB <= -0.5)
      {
       if(InpBBAlert && InpNotifyDevice)
-         SendNotification("[BB " + InpAlertPrefix + "] Over SELL");
+         SendNotification("[BB " + AlertPrefix() + "] Over SELL");
       if(InpBBAlert && !InpNotifyDevice)
          Alert("[BB Alert] Over SELL");
       fOverSell = true;
@@ -249,7 +248,7 @@ int OnCalculate(const int rates_total,
    if(fOverSell && PercentB >= -0.45)
      {
       if(InpBBAlert && InpNotifyDevice)
-         SendNotification("[BB " + InpAlertPrefix + "] O/S -> Normal");
+         SendNotification("[BB " + AlertPrefix() + "] O/S -> Normal");
       if(InpBBAlert && !InpNotifyDevice)
          Alert("[BB Alert] O/S -> Normal");
 
@@ -268,5 +267,34 @@ void  ChangeColors(int plot_id, color &cols[], int plot_colors)
   {
    for(int i = 0; i < plot_colors; i ++)
       PlotIndexSetInteger(plot_id, PLOT_LINE_COLOR, i, cols[i]);
+  }
+//+------------------------------------------------------------------+
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+string  AlertPrefix()
+  {
+   string prefix = "";
+   
+   switch(_Period)
+     {
+      case PERIOD_M1:
+         prefix = "M1";
+         break;
+      case PERIOD_M5:
+         prefix = "M5";
+         break;
+      case PERIOD_M15:
+         prefix = "M15";
+         break;
+      case PERIOD_M30:
+         prefix = "M30";
+         break;
+      case PERIOD_H1:
+         prefix = "H1";
+         break;
+     }
+     return prefix;
   }
 //+------------------------------------------------------------------+
