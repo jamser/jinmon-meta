@@ -20,6 +20,7 @@ input double   slDelta=0;
 input double   orderLot=0;
 
 //--- Trade variables.
+const string   GOTO_TIME = "goto";
 const string   SELL_ORDER = "sell";
 const string   BUY_ORDER = "buy";
 const string   CLOSE_ORDER = "close";
@@ -63,7 +64,8 @@ enum ENUM_AGENT_ACTION
   {
    INIT_P1_INDICATOR = 0,
    INIT_P2_INDICATOR = 1,
-   NONE_ACTION = -1
+   GOTO_DATETIME = 2,
+   NONE_ACTION = -1,
   };
 
 //--- A/D% Indicator
@@ -144,7 +146,7 @@ int OnInit()
       MessageBox("Please assign List Name to enable Feature Extraction !");
    else
      {
-      string fileName = "Features\\" + InpListName + ".txt";
+      string fileName = "Features\\" + InpListName + ".json";
       Print("Root Folder : " + TerminalInfoString(TERMINAL_DATA_PATH));
       Print("Open file : " + fileName);
 
@@ -205,6 +207,7 @@ void OnDeinit(const int reason)
   {
    if(fileHandle != INVALID_HANDLE)
      {
+      FileSeek(fileHandle, -2, SEEK_CUR);
       FileWriteString(fileHandle, "]");
       Print("Flush ...");
       FileFlush(fileHandle);
@@ -239,6 +242,9 @@ double CalibrateOHLC(double p)
 //+------------------------------------------------------------------+
 int prevExtractTime = 0;
 
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
 void OnTick()
   {
    if(isTestMode)
@@ -248,8 +254,9 @@ void OnTick()
       SymbolInfoTick(_Symbol, latest_price);
 
       int trimmedTime = latest_price.time / extractPeriod;
-      if(prevExtractTime == trimmedTime) return ;
-      
+      if(prevExtractTime == trimmedTime)
+         return ;
+
       prevExtractTime = trimmedTime;
       UpdateP2Buffer();
 
@@ -343,8 +350,6 @@ ENUM_AGENT_ACTION Polling()
    if(res==-1)
      {
       Print("Error in WebRequest. Error code  =",GetLastError());
-      //--- Perhaps the URL is not listed, display a message about the necessity to add the address
-      //MessageBox("Add the address to the list of allowed URLs on tab 'Expert Advisors'","Error",MB_ICONINFORMATION);
       Print("Add the address [", agentCallback, "] to the list of allowed URLs on tab 'Expert Advisors'");
      }
    else
@@ -361,9 +366,24 @@ ENUM_AGENT_ACTION Polling()
             CJAVal jv;
             jv.Deserialize(result);
 
+            const string action = jv["a"].ToStr();
+
+            if(action == GOTO_TIME)
+              {
+               const long dt = jv["dt"].ToInt();
+               int shift = iBarShift(_Symbol, PERIOD_CURRENT, (datetime)(dt), false);
+
+               if(ChartGetInteger(0, CHART_AUTOSCROLL))
+                  ChartSetInteger(0, CHART_AUTOSCROLL, false);
+
+               ChartNavigate(0, CHART_BEGIN, shift);
+
+               Print("Goto Time "+ dt + " / shift: " + shift);
+               return GOTO_DATETIME;
+              }
+
             double stoploss = jv["sl"].ToDbl();
             const double lot = orderLot ? orderLot : jv["l"].ToDbl();
-            const string action = jv["a"].ToStr();
             const bool addition = jv["add"].ToBool();
 
             MqlTick latest_price;
