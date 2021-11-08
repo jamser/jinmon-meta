@@ -30,9 +30,10 @@ const string   SELL_ORDER = "sell";
 const string   BUY_ORDER = "buy";
 const string   CLOSE_ORDER = "close";
 
-CSymbolInfo xauSymbol;
-CIndicators indicators;
-CTrailingPSAR trailing;
+CSymbolInfo    xauSymbol;
+CIndicators    indicators;
+CTrailingPSAR  trailing;
+CiSAR          *pSAR;
 
 CiADXWilder ADX;
 
@@ -58,6 +59,7 @@ ENUM_TREND_STATE trend = NONE_TREND;
 //--- input parameters
 input bool     InpVerbose=false;          // Verbose
 input bool     InpDryRun=false;           // Dry Run
+input bool     InpNotifyHost=true;        // Send Notification to Host.
 
 input ENUM_TIMEFRAMES   LowTF  = PERIOD_M1;
 input ENUM_TIMEFRAMES   HighTF = PERIOD_M15;
@@ -100,6 +102,8 @@ int OnInit()
    trailing.Init(&xauSymbol, HighTF, _Point);
    trailing.InitIndicators(&indicators);
 
+   pSAR = indicators.At(1);
+
 //--- Initialize Trade Object.
    trade.SetExpertMagicNumber(order_magic);
    trade.SetDeviationInPoints(10);
@@ -121,11 +125,15 @@ void OnDeinit(const int reason)
 double prevDMP = 0;
 double prevDMN = 0;
 
+ENUM_TREND_STATE sarTrend = NONE_TREND;
+
 //+------------------------------------------------------------------+
 //|                                                                  |
 //+------------------------------------------------------------------+
 void OnTick()
   {
+   ulong seconds = TimeCurrent();
+
    double DMP1 = ADX.Plus(1);
    double DMN1 = ADX.Minus(1);
    double DMP0 = ADX.Plus(0);
@@ -146,11 +154,28 @@ void OnTick()
 
    double sl, tp, sar, tmp;
 
+//--- Check SAR Up or Down per five minutes.
+   if(seconds % 300)
+   {
+      ENUM_TREND_STATE newTrend;
+      
+      sar = pSAR.Main(0);
+      if(sar > xauSymbol.Ask())
+         newTrend = BEARISH_TREND;
+      else if(sar < xauSymbol.Bid())
+         newTrend = BULLISH_TREND;
+
+      if(sarTrend != newTrend)
+      {
+         sarTrend = newTrend;
+         InpNotifyHost ? SendNotification("SAR Trend " + (sarTrend == BULLISH_TREND ? "UP" : "DOWN")) : 0;
+      }
+   }
+   
 //--- Trailing Stop / Profit
    if(PositionsTotal())
      {
       //--- per 15 minutes check SAR again.
-      ulong seconds = TimeCurrent();
       if(seconds % 900)
          return ;
 
