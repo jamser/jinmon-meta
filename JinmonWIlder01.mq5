@@ -209,13 +209,18 @@ void OnTick()
 
       if(toUpdate)
         {
-         ulong ticket = position.Ticket();
+         ulong ticket;
+         const string name = xauSymbol.Name();
 
          for(int count = PositionsTotal(); count > 0; count --)
            {
-            if(position.SelectByIndex(count - 1) &&
+            position.SelectByIndex(count - 1);
+            ticket = position.Ticket();
+            if(position.Symbol() == name &&
                trade.PositionModify(ticket, sl, tp))
+              {
                Print("Update (" + ticket + ") StopLoss: " + sl + " / TakeProfit: " + tp);
+              }
            }
         }
      }
